@@ -1,0 +1,39 @@
+{
+  "name": "Cliente Exemplo",
+  "colors": {
+    "background": "#04170c",
+    "note": "#1f9d55",
+    "noteBorder": "#d8ffe8",
+    "approach": "#7bd4a0",
+    "textPrimary": "#eafff2",
+    "accent": "#66ff99",
+    "perfect": "#66ff99",
+    "great": "#4cd964",
+    "good": "#5ac8fa",
+    "miss": "#ff3b30"
+  },
+  "texts": {
+    "title": "RITMO VERDE",
+    "subtitle": "Acerte as estrelas no tempo da música",
+    "startCta": "JOGAR",
+    "resultsTitle": "SUA PONTUAÇÃO",
+    "playAgainCta": "DE NOVO"
+  },
+  "noteShape": "star",
+  "gameplay": {
+    "bpm": 110,
+    "noteCount": 24,
+    "approachMs": 1000,
+    "seed": 21,
+    "speed": 1.25
+  },
+  "audio": {
+    "track": "arcade",
+    "volume": 0.9,
+    "hitSounds": true
+  },
+  "lead": {
+    "enabled": true,
+    "headline": "Deixe seu contato e concorra ao sorteio"
+  }
+}
