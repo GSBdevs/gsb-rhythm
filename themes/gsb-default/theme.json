@@ -1,0 +1,39 @@
+{
+  "name": "SB Rhythm",
+  "colors": {
+    "background": "#0a0a0a",
+    "note": "#2d6cdf",
+    "noteBorder": "#ffffff",
+    "approach": "#9a9a9a",
+    "textPrimary": "#ffffff",
+    "accent": "#ffd23f",
+    "perfect": "#ffd23f",
+    "great": "#4cd964",
+    "good": "#5ac8fa",
+    "miss": "#ff3b30"
+  },
+  "texts": {
+    "title": "SB RHYTHM",
+    "subtitle": "Toque nas notas no ritmo da batida",
+    "startCta": "TOQUE",
+    "resultsTitle": "RESULTADO",
+    "playAgainCta": "DE NOVO"
+  },
+  "noteShape": "circle",
+  "gameplay": {
+    "bpm": 100,
+    "noteCount": 32,
+    "approachMs": 900,
+    "seed": 7,
+    "speed": 1
+  },
+  "audio": {
+    "track": "beat",
+    "volume": 0.8,
+    "hitSounds": true
+  },
+  "lead": {
+    "enabled": false,
+    "headline": "Cadastre-se para concorrer ao brinde"
+  }
+}
