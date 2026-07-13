@@ -1,65 +1,65 @@
 # TODO — o que falta e por quê
 
-Atualizado em 2026-07-10. Itens em ordem de prioridade sugerida.
+Atualizado em 2026-07-13. Itens em ordem de prioridade sugerida.
 
-## 1. Músicas reais (arquivos de áudio) + beatmaps por faixa
-Hoje as 3 trilhas são sintetizadas (metrônomo/batida/arcade) — proposital: zero
-copyright e sincronia perfeita. Para músicas reais:
-- Carregar MP3/OGG com `decodeAudioData` → `AudioBufferSourceNode.start(zeroAtSec)`
-  no MESMO relógio do Conductor (nada mais muda).
-- Beatmap deixa de ser gerado e vira arquivo `chart.json` por faixa
-  (`{bpm, offsetMs, notes:[{timeMs,x,y}]}`) + seletor de música na tela inicial.
-- Upload da música pelo editor (cuidado: arquivo grande não cabe em localStorage —
-  no totem vai para disco via bridge kiosk; na web, IndexedDB).
-- ATENÇÃO LICENÇA: música em evento corporativo exige licenciamento (ECAD) ou
-  faixas royalty-free — decisão de negócio antes de implementar.
+## 1. Testes físicos de portabilidade (código pronto, falta o aparelho)
+- **Windows:** `npm run electron` (janela) e `npm run dist` (gera `release/win-unpacked/`
+  + zip). Nunca aberto numa máquina com display neste ambiente.
+- **Android:** `npm run android:sync && npm run android:open` (exige Android Studio/SDK).
+  Scaffold criado, APK nunca compilado. Verificar: IndexedDB (música) e localStorage
+  (tema/leads) persistem no WebView; latência de toque → calibrar no aparelho.
+- Lockdown de kiosk (fullscreen travado, bloquear atalhos/screen pinning) — decidir
+  grau de trava por evento; hoje a janela é fullscreen simples (ESC sai).
 
-## 2. Casca Electron (Windows) + Capacitor (Android)
-Espelhar o kiosk-maze/roleta (padrões já validados nos outros projetos):
-- `shell/main.cjs` + preload com `window.kiosk` (loadTheme/saveTheme/saveLead do disco).
-- **Porta HTTP fixa** (gotcha resolvido na roleta/matching: porta efêmera muda o
-  origin e zera o localStorage a cada abertura). Sugestão: 39219.
-- `electron-builder` target `dir`+`zip` com `signAndEditExecutable:false`
-  (winCodeSign falha sem privilégio de symlink).
-- Android: Capacitor + `@capacitor/filesystem`, mesma KioskBridge.
-- Lockdown de kiosk (fullscreen, bloquear atalhos) — decidir grau de trava.
+## 2. Música no totem — melhorias
+- Áudio vive no IndexedDB e o chart no tema; exportar theme.json NÃO leva o áudio.
+  Para replicar em N totens: importar o arquivo de música em cada um (ou implementar
+  export .zip tema+áudio).
+- Múltiplas faixas + seletor na tela inicial (hoje: uma música por tema).
+- Ajuste manual de BPM/offset pós-análise (para faixas difíceis) — o editor já
+  mostra a confiança; adicionar campos editáveis é simples.
+- LICENÇA: música em evento corporativo exige ECAD ou royalty-free (aviso já
+  está no editor).
 
-## 3. Calibração de latência (padrão Bemuse)
-Touchscreens de totem têm latência de toque variável (30–100 ms). Adicionar:
-- `theme.gameplay.inputOffsetMs` (deslocamento aplicado ao julgar o toque).
-- Tela de calibração no editor: usuário toca 8 batidas do metrônomo, mediana do
-  desvio vira o offset sugerido.
-
-## 4. Leads — melhorias
+## 3. Leads — melhorias
 - Campos configuráveis pelo editor (hoje fixo: nome/e-mail/telefone), como o
   `leadForm.fields` do kiosk-maze.
-- Opção de formulário OBRIGATÓRIO (hoje tem "pular") — decisão de negócio por evento.
+- Opção de formulário OBRIGATÓRIO (hoje tem "agora não") — decisão por evento.
 - LGPD: consentimento presencial (padrão dos outros totens GSB); avaliar checkbox.
-- No totem: gravar em disco (CSV ao lado do .exe) via bridge — item 2.
+- No totem: gravar leads em disco (CSV ao lado do .exe) via bridge `window.kiosk`
+  — hoje ficam no localStorage e saem pelo CSV do editor.
 
-## 5. Leaderboard / ranking local
+## 4. Leaderboard / ranking local
 Top 10 por pontuação (nome do lead), tela acessível da attract — reusar o
 desenho do kiosk-maze (`data/leaderboard.ts` de lá é injetável e testado).
 
-## 6. Polimento de gameplay
-- Padrões rítmicos mais ricos no gerador (colcheias, pausas, rajadas) por dificuldade.
+## 5. Polimento de gameplay
+- Padrões rítmicos mais ricos por dificuldade (colcheias/rajadas no chart).
 - Sliders/hold notes (arrastar segurando) — segunda mecânica do osu!.
-- Multi-toque real (duas notas simultâneas para duas mãos — o core já aceita,
-  o gerador é que nunca sobrepõe janelas).
-- Efeito de partículas no acerto perfeito; screen shake sutil em combo alto.
-- Vinheta/attract loop com demonstração automática (auto-play fantasma).
+- Multi-toque real (duas notas simultâneas para duas mãos).
+- Partículas no acerto perfeito; screen shake sutil em combo alto.
 
-## 7. Operação em evento
+## 6. Operação em evento
 - Reset por inatividade em TODAS as telas (hoje o jogo não volta sozinho ao
   attract se abandonado no meio da partida — só termina quando as notas acabam).
-- Modo atração: após N segundos parado na tela inicial, rodar demo automática.
+- Modo atração: demo automática após N segundos parado.
 - `?fullscreen=1` → requestFullscreen no primeiro toque (web/PWA).
+- Auto-latência: usar `AudioContext.outputLatency` como valor inicial da calibração.
 
 ## Feito (não refazer)
-- Core puro testado (beatmap/conductor/judgement/scoring/game-state/grade).
-- Design osu!-like: logo circular pulsante, triângulos lazer, contagem 4-3-2-1,
-  nota-conceito SS–D, hitsounds, combo com pulso.
-- Editor completo com prévia ao vivo, presets de dificuldade + velocidade
-  (0.5x–2x), 3 trilhas sintetizadas, volume, cores/textos/formas, import/export,
-  aplicar (localStorage), leads (contagem/CSV/apagar).
-- Fluxo de lead pós-resultado (opcional por tema).
+- Core puro testado: beatmap/conductor/judgement/scoring/game-state/grade +
+  **audio-analysis** (BPM/offset automáticos) + **chart** (quantização) — 43 testes.
+- **Músicas reais**: upload no editor → análise automática (BPM/offset/notas) →
+  IndexedDB + chart no tema → toca sincronizada no relógio de áudio com
+  playbackRate = speed (Double Time). Espec completa em BEATMAP-SISTEMA.md.
+- **Calibração de latência**: `gameplay.inputOffsetMs` aplicado no julgamento +
+  assistente "Calibrar tocando" no editor (12 batidas, mediana).
+- **Precisão ao vivo no HUD** (canto superior direito, estilo osu!).
+- Design osu!-like: logo pulsante, triângulos lazer, contagem, nota SS–D,
+  hitsounds, combo com pulso.
+- **Editor redesenhado** (v2, sem prévia embutida; base de design p/ outros apps):
+  cards com ícones, switches, segmented controls, presets de dificuldade,
+  velocidade 0.5x–2x, música, calibração, leads. "Testar jogo" abre ?preview=1.
+- **Lead form v2** (glassmorphism, animação, "agora não") — desligado por padrão.
+- **Electron** (shell/main.cjs, porta fixa 39219) + **Capacitor** (android/ scaffold).
+- **GitHub + Pages**: repo Paszmani/sb-rhythm-game, deploy via `npm run deploy`.

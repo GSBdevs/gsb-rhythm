@@ -3,217 +3,349 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SB Rhythm — Editor de Tema</title>
+    <title>SB Rhythm — Personalização</title>
     <style>
       :root {
         --bg: #0a0a0a;
-        --panel: #151515;
-        --panel-2: #1d1d1d;
-        --border: #2a2a2a;
-        --text: #eaeaea;
-        --muted: #9a9a9a;
+        --card: #141416;
+        --card-2: #1c1c20;
+        --border: #26262b;
+        --border-soft: #1f1f24;
+        --text: #f2f2f2;
+        --muted: #8f8f98;
         --accent: #ffd23f;
+        --accent-ink: #141005;
         --blue: #2d6cdf;
+        --danger: #ff5c52;
+        --radius: 18px;
       }
       * { box-sizing: border-box; }
-      html, body { margin: 0; background: var(--bg); color: var(--text); font-family: Arial, sans-serif; }
+      html, body {
+        margin: 0;
+        background:
+          radial-gradient(1200px 500px at 80% -10%, rgba(45,108,223,.12), transparent 60%),
+          radial-gradient(900px 420px at 10% -10%, rgba(255,210,63,.07), transparent 60%),
+          var(--bg);
+        color: var(--text);
+        font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+        min-height: 100vh;
+      }
 
+      /* ---------- header ---------- */
       header {
-        position: sticky; top: 0; z-index: 5;
+        position: sticky; top: 0; z-index: 20;
         display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-        padding: 14px 20px; background: rgba(10,10,10,.92); border-bottom: 1px solid var(--border);
-        backdrop-filter: blur(6px);
+        padding: 14px clamp(16px, 4vw, 40px);
+        background: rgba(10,10,12,.82);
+        border-bottom: 1px solid var(--border-soft);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
       }
-      header h1 { font-size: 18px; margin: 0 auto 0 0; color: var(--muted); font-weight: normal; }
-      header h1 b { color: var(--accent); }
-      button, .btn {
-        font-size: 14px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border);
-        background: var(--panel-2); color: var(--text); cursor: pointer;
+      .brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
+      .brand .dot {
+        width: 38px; height: 38px; border-radius: 50%;
+        background: radial-gradient(circle at 32% 30%, var(--accent), #b8921f);
+        box-shadow: 0 0 24px rgba(255,210,63,.35);
       }
-      button:hover { border-color: var(--muted); }
-      .btn-primary { background: var(--accent); border-color: var(--accent); color: #000; font-weight: bold; }
-      .btn-danger { color: #ff6b60; }
+      .brand h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .01em; }
+      .brand p { font-size: 12px; margin: 0; color: var(--muted); }
 
-      main { display: grid; grid-template-columns: minmax(360px, 520px) 1fr; gap: 24px; padding: 24px; max-width: 1500px; margin: 0 auto; }
-
-      details {
-        background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-        margin-bottom: 14px; overflow: hidden;
+      button { font-family: inherit; cursor: pointer; }
+      .btn {
+        font-size: 13.5px; font-weight: 600; padding: 10px 16px; border-radius: 12px;
+        border: 1px solid var(--border); background: var(--card-2); color: var(--text);
+        transition: border-color .15s, transform .08s, background .15s;
       }
-      summary {
-        cursor: pointer; padding: 16px 18px; font-weight: bold; font-size: 15px; list-style: none;
-        display: flex; justify-content: space-between; align-items: center;
+      .btn:hover { border-color: #3a3a42; }
+      .btn:active { transform: scale(.97); }
+      .btn.primary {
+        background: var(--accent); border-color: var(--accent); color: var(--accent-ink);
+        box-shadow: 0 6px 22px rgba(255,210,63,.25);
       }
-      summary::after { content: '▾'; color: var(--muted); transition: transform .2s; }
-      details[open] summary::after { transform: rotate(180deg); }
-      .body { padding: 4px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+      .btn.ghost { background: transparent; }
+      .btn.danger { color: var(--danger); }
 
-      label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+      /* ---------- layout ---------- */
+      main { max-width: 860px; margin: 0 auto; padding: 28px clamp(14px, 4vw, 32px) 100px; }
+
+      .card {
+        background: linear-gradient(180deg, rgba(255,255,255,.025), transparent 40%) var(--card);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius);
+        margin-bottom: 18px;
+        overflow: clip;
+      }
+      .card-head {
+        display: flex; align-items: center; gap: 14px;
+        padding: 18px 22px; cursor: pointer; user-select: none;
+      }
+      .card-head .ico {
+        width: 42px; height: 42px; border-radius: 12px; flex: none;
+        display: grid; place-items: center; font-size: 20px;
+        background: var(--card-2); border: 1px solid var(--border-soft);
+      }
+      .card-head h2 { font-size: 15.5px; margin: 0; font-weight: 600; }
+      .card-head p { font-size: 12.5px; margin: 2px 0 0; color: var(--muted); }
+      .card-head .chev { margin-left: auto; color: var(--muted); transition: transform .2s; font-size: 13px; }
+      .card.open .chev { transform: rotate(180deg); }
+      .card-body { display: none; padding: 4px 22px 24px; flex-direction: column; gap: 16px; }
+      .card.open .card-body { display: flex; }
+
+      /* ---------- controles ---------- */
+      .field { display: flex; flex-direction: column; gap: 7px; }
+      .field > span { font-size: 12.5px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
       input[type="text"], input[type="number"], select {
-        font-size: 15px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
-        background: var(--panel-2); color: var(--text); width: 100%;
+        font-family: inherit; font-size: 14.5px; padding: 12px 14px; border-radius: 12px;
+        border: 1px solid var(--border); background: var(--card-2); color: var(--text);
+        width: 100%; outline: none; transition: border-color .15s;
       }
-      input:focus, select:focus { outline: 1px solid var(--accent); }
-      .colors { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-      .color-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
-      .color-row input[type="color"] { width: 42px; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: none; padding: 2px; cursor: pointer; }
-      .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      input:focus, select:focus { border-color: var(--accent); }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .hint { font-size: 12px; color: var(--muted); margin: 0; line-height: 1.5; }
 
-      .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-      .presets button.active { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: bold; }
-      .slider { display: flex; align-items: center; gap: 12px; }
-      .slider input[type="range"] { flex: 1; accent-color: var(--accent); }
-      .slider output { min-width: 64px; text-align: right; font-size: 15px; color: var(--accent); font-weight: bold; }
-      .check { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text); }
-      .check input { width: 20px; height: 20px; accent-color: var(--accent); }
-      .hint { font-size: 12px; color: var(--muted); margin: 0; }
-
-      .preview-col { position: sticky; top: 78px; align-self: start; }
-      .device {
-        aspect-ratio: 9 / 16; max-height: calc(100vh - 120px); margin: 0 auto;
-        border: 3px solid var(--border); border-radius: 22px; overflow: hidden; background: #000;
+      .color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+      .swatch {
+        display: flex; align-items: center; gap: 10px; font-size: 13px;
+        padding: 10px 12px; border-radius: 12px; background: var(--card-2);
+        border: 1px solid var(--border-soft); cursor: pointer;
       }
-      .device iframe { width: 100%; height: 100%; border: 0; }
-      .preview-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 10px; }
+      .swatch input[type="color"] {
+        width: 34px; height: 34px; flex: none; border: none; border-radius: 10px;
+        background: none; padding: 0; cursor: pointer;
+      }
+      .swatch input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+      .swatch input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(255,255,255,.2); border-radius: 8px; }
 
-      .leads-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-      #lead-count { color: var(--accent); font-weight: bold; }
+      .segmented { display: flex; gap: 6px; flex-wrap: wrap; }
+      .segmented button {
+        flex: 1; min-width: 74px; padding: 12px 10px; border-radius: 12px;
+        border: 1px solid var(--border); background: var(--card-2); color: var(--muted);
+        font-size: 13px; font-weight: 600; transition: all .15s;
+      }
+      .segmented button .g { display: block; font-size: 22px; margin-bottom: 4px; }
+      .segmented button.active {
+        background: rgba(45,108,223,.16); border-color: var(--blue); color: var(--text);
+      }
 
-      @media (max-width: 900px) {
-        main { grid-template-columns: 1fr; }
-        .preview-col { position: static; }
-        .device { max-height: 46vh; }
+      .slider-row { display: flex; align-items: center; gap: 14px; }
+      .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); height: 32px; }
+      .slider-row output {
+        min-width: 74px; text-align: center; font-size: 13.5px; font-weight: 700;
+        color: var(--accent); background: rgba(255,210,63,.1); border: 1px solid rgba(255,210,63,.25);
+        padding: 7px 10px; border-radius: 10px;
+      }
+
+      .switch-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 14px;
+        padding: 13px 16px; border-radius: 12px; background: var(--card-2);
+        border: 1px solid var(--border-soft); cursor: pointer;
+      }
+      .switch-row .lbl { font-size: 14px; }
+      .switch-row .lbl small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+      .switch { position: relative; width: 46px; height: 26px; flex: none; }
+      .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+      .switch .track {
+        position: absolute; inset: 0; border-radius: 13px; background: #33333a; transition: background .18s;
+      }
+      .switch .track::after {
+        content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+        border-radius: 50%; background: #fff; transition: transform .18s;
+      }
+      .switch input:checked + .track { background: var(--accent); }
+      .switch input:checked + .track::after { transform: translateX(20px); }
+
+      /* ---------- música ---------- */
+      .music-drop {
+        border: 1.5px dashed #3a3a44; border-radius: 14px; padding: 26px;
+        text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.6;
+        transition: border-color .15s, background .15s; cursor: pointer;
+      }
+      .music-drop:hover { border-color: var(--accent); background: rgba(255,210,63,.04); }
+      .music-drop b { color: var(--text); font-size: 14.5px; }
+      .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+      .badge {
+        font-size: 12.5px; font-weight: 700; padding: 7px 12px; border-radius: 10px;
+        background: rgba(45,108,223,.14); border: 1px solid rgba(45,108,223,.4); color: #9dbdf5;
+      }
+      .badge.gold { background: rgba(255,210,63,.1); border-color: rgba(255,210,63,.35); color: var(--accent); }
+      #music-audio { width: 100%; margin-top: 4px; }
+
+      /* ---------- calibração ---------- */
+      .cal-overlay {
+        position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 26px;
+        background: rgba(5,5,7,.94); backdrop-filter: blur(8px); text-align: center; padding: 24px;
+      }
+      .cal-circle {
+        width: min(46vw, 300px); aspect-ratio: 1; border-radius: 50%;
+        border: 5px solid var(--accent); display: grid; place-items: center;
+        font-size: 20px; font-weight: 700; color: var(--accent);
+        transition: transform .08s;
+      }
+      .cal-overlay p { max-width: 420px; color: var(--muted); font-size: 14.5px; line-height: 1.6; margin: 0; }
+      .cal-overlay .big { color: var(--text); font-size: 17px; }
+
+      .leads-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+      #lead-count { color: var(--accent); font-weight: 700; }
+
+      footer { text-align: center; color: #55555e; font-size: 12px; padding: 8px 0 40px; }
+
+      @media (max-width: 640px) {
+        .grid-2 { grid-template-columns: 1fr; }
+        header { padding-bottom: 12px; }
       }
     </style>
   </head>
   <body>
     <header>
-      <h1><b>SB Rhythm</b> — editor de tema</h1>
-      <button id="act-import">Importar</button>
-      <button id="act-download">Baixar JSON</button>
-      <button id="act-reset" class="btn-danger">Resetar</button>
-      <button id="act-apply" class="btn-primary">✓ Aplicar e voltar ao jogo</button>
+      <div class="brand">
+        <div class="dot"></div>
+        <div>
+          <h1>Personalização</h1>
+          <p>SB Rhythm · as mudanças valem após “Aplicar”</p>
+        </div>
+      </div>
+      <button class="btn ghost" id="act-test">▶ Testar jogo</button>
+      <button class="btn" id="act-import">Importar</button>
+      <button class="btn" id="act-download">Baixar JSON</button>
+      <button class="btn danger ghost" id="act-reset">Resetar</button>
+      <button class="btn primary" id="act-apply">✓ Aplicar e voltar</button>
       <input type="file" id="file-import" accept="application/json" hidden />
+      <input type="file" id="file-music" accept="audio/*" hidden />
     </header>
 
     <main>
-      <div class="form-col">
-        <details open>
-          <summary>Identidade e textos</summary>
-          <div class="body">
-            <label class="field">Nome do tema<input type="text" id="t-name" /></label>
-            <label class="field">Título (tela inicial)<input type="text" id="t-title" /></label>
-            <label class="field">Subtítulo<input type="text" id="t-subtitle" /></label>
-            <div class="row2">
-              <label class="field">Texto do botão iniciar<input type="text" id="t-startCta" /></label>
-              <label class="field">Texto do botão repetir<input type="text" id="t-playAgainCta" /></label>
-            </div>
-            <label class="field">Título da tela de resultado<input type="text" id="t-resultsTitle" /></label>
+      <section class="card open">
+        <div class="card-head"><div class="ico">✏️</div><div><h2>Identidade e textos</h2><p>Nome do tema e frases exibidas nas telas</p></div><span class="chev">▼</span></div>
+        <div class="card-body">
+          <label class="field"><span>Nome do tema</span><input type="text" id="t-name" /></label>
+          <div class="grid-2">
+            <label class="field"><span>Título (tela inicial)</span><input type="text" id="t-title" /></label>
+            <label class="field"><span>Subtítulo</span><input type="text" id="t-subtitle" /></label>
           </div>
-        </details>
-
-        <details open>
-          <summary>Cores</summary>
-          <div class="body">
-            <div class="colors">
-              <label class="color-row"><input type="color" id="c-background" />Fundo</label>
-              <label class="color-row"><input type="color" id="c-note" />Nota</label>
-              <label class="color-row"><input type="color" id="c-noteBorder" />Borda da nota</label>
-              <label class="color-row"><input type="color" id="c-approach" />Anel / neutro</label>
-              <label class="color-row"><input type="color" id="c-textPrimary" />Texto</label>
-              <label class="color-row"><input type="color" id="c-accent" />Destaque</label>
-              <label class="color-row"><input type="color" id="c-perfect" />Perfeito</label>
-              <label class="color-row"><input type="color" id="c-great" />Ótimo</label>
-              <label class="color-row"><input type="color" id="c-good" />Bom</label>
-              <label class="color-row"><input type="color" id="c-miss" />Erro</label>
-            </div>
+          <div class="grid-2">
+            <label class="field"><span>Botão iniciar</span><input type="text" id="t-startCta" /></label>
+            <label class="field"><span>Botão repetir</span><input type="text" id="t-playAgainCta" /></label>
           </div>
-        </details>
+          <label class="field"><span>Título do resultado</span><input type="text" id="t-resultsTitle" /></label>
+        </div>
+      </section>
 
-        <details open>
-          <summary>Notas (forma)</summary>
-          <div class="body">
-            <label class="field">Forma da nota
-              <select id="n-shape">
-                <option value="circle">Círculo</option>
-                <option value="square">Quadrado</option>
-                <option value="diamond">Losango</option>
-                <option value="hexagon">Hexágono</option>
-                <option value="star">Estrela</option>
-              </select>
-            </label>
+      <section class="card open">
+        <div class="card-head"><div class="ico">🎨</div><div><h2>Cores</h2><p>Paleta completa do jogo</p></div><span class="chev">▼</span></div>
+        <div class="card-body">
+          <div class="color-grid">
+            <label class="swatch"><input type="color" id="c-background" />Fundo</label>
+            <label class="swatch"><input type="color" id="c-note" />Nota</label>
+            <label class="swatch"><input type="color" id="c-noteBorder" />Borda da nota</label>
+            <label class="swatch"><input type="color" id="c-approach" />Anel / neutro</label>
+            <label class="swatch"><input type="color" id="c-textPrimary" />Texto</label>
+            <label class="swatch"><input type="color" id="c-accent" />Destaque</label>
+            <label class="swatch"><input type="color" id="c-perfect" />Perfeito</label>
+            <label class="swatch"><input type="color" id="c-great" />Ótimo</label>
+            <label class="swatch"><input type="color" id="c-good" />Bom</label>
+            <label class="swatch"><input type="color" id="c-miss" />Erro</label>
           </div>
-        </details>
+        </div>
+      </section>
 
-        <details open>
-          <summary>Dificuldade e velocidade</summary>
-          <div class="body">
-            <div class="presets">
-              <button type="button" data-preset="facil">Fácil</button>
-              <button type="button" data-preset="normal">Normal</button>
-              <button type="button" data-preset="dificil">Difícil</button>
-              <button type="button" data-preset="expert">Expert</button>
-            </div>
-            <label class="field">Velocidade do jogo
-              <div class="slider">
-                <input type="range" id="g-speed" min="0.5" max="2" step="0.05" />
-                <output id="g-speed-out">100%</output>
-              </div>
-              <p class="hint">Multiplica o ritmo das notas. 100% = velocidade da música configurada abaixo.</p>
-            </label>
-            <label class="field">Tempo de aproximação (ms) — menor = mais difícil
-              <div class="slider">
-                <input type="range" id="g-approach" min="400" max="2000" step="50" />
-                <output id="g-approach-out"></output>
-              </div>
-            </label>
-            <div class="row2">
-              <label class="field">BPM base<input type="number" id="g-bpm" min="40" max="220" /></label>
-              <label class="field">Quantidade de notas<input type="number" id="g-notes" min="4" max="500" /></label>
-            </div>
-            <label class="field">Seed do mapa (mesmo número = mesmas posições)<input type="number" id="g-seed" min="0" /></label>
+      <section class="card open">
+        <div class="card-head"><div class="ico">⬡</div><div><h2>Forma das notas</h2><p>O alvo que o jogador toca</p></div><span class="chev">▼</span></div>
+        <div class="card-body">
+          <div class="segmented" id="shape-picker">
+            <button type="button" data-shape="circle"><span class="g">●</span>Círculo</button>
+            <button type="button" data-shape="square"><span class="g">■</span>Quadrado</button>
+            <button type="button" data-shape="diamond"><span class="g">◆</span>Losango</button>
+            <button type="button" data-shape="hexagon"><span class="g">⬡</span>Hexágono</button>
+            <button type="button" data-shape="star"><span class="g">★</span>Estrela</button>
           </div>
-        </details>
+        </div>
+      </section>
 
-        <details open>
-          <summary>Áudio</summary>
-          <div class="body">
-            <label class="field">Trilha
-              <select id="a-track">
-                <option value="beat">Batida (bateria)</option>
-                <option value="metronome">Metrônomo</option>
-                <option value="arcade">Arcade (8-bit)</option>
-              </select>
-            </label>
-            <label class="field">Volume
-              <div class="slider">
-                <input type="range" id="a-volume" min="0" max="1" step="0.05" />
-                <output id="a-volume-out"></output>
-              </div>
-            </label>
-            <label class="check"><input type="checkbox" id="a-hitsounds" />Som ao acertar nota (hitsound)</label>
-            <p class="hint">Trilhas são sintetizadas no aparelho (sem arquivos de música). Suporte a MP3/OGG próprios: ver TODO.md.</p>
+      <section class="card open">
+        <div class="card-head"><div class="ico">⚡</div><div><h2>Dificuldade e velocidade</h2><p>Presets prontos ou ajuste fino</p></div><span class="chev">▼</span></div>
+        <div class="card-body">
+          <div class="segmented" id="preset-picker">
+            <button type="button" data-preset="facil">🌱<br />Fácil</button>
+            <button type="button" data-preset="normal">🎯<br />Normal</button>
+            <button type="button" data-preset="dificil">🔥<br />Difícil</button>
+            <button type="button" data-preset="expert">💀<br />Expert</button>
           </div>
-        </details>
+          <label class="field"><span>Velocidade do jogo (multiplica o ritmo — e a música, como o Double Time do osu!)</span>
+            <div class="slider-row"><input type="range" id="g-speed" min="0.5" max="2" step="0.05" /><output id="g-speed-out"></output></div>
+          </label>
+          <label class="field"><span>Tempo de aproximação — menor = mais difícil</span>
+            <div class="slider-row"><input type="range" id="g-approach" min="400" max="2000" step="50" /><output id="g-approach-out"></output></div>
+          </label>
+          <div class="grid-2">
+            <label class="field"><span>BPM base (modo sintetizado)</span><input type="number" id="g-bpm" min="40" max="220" /></label>
+            <label class="field"><span>Quantidade de notas (modo sintetizado)</span><input type="number" id="g-notes" min="4" max="500" /></label>
+          </div>
+          <label class="field"><span>Seed do mapa (mesmo número = mesmas posições)</span><input type="number" id="g-seed" min="0" /></label>
+        </div>
+      </section>
 
-        <details>
-          <summary>Captura de leads</summary>
-          <div class="body">
-            <label class="check"><input type="checkbox" id="l-enabled" />Pedir cadastro após o resultado</label>
-            <label class="field">Chamada do formulário<input type="text" id="l-headline" /></label>
-            <div class="leads-bar">
-              <span>Leads salvos neste aparelho: <span id="lead-count">0</span></span>
-              <button type="button" id="lead-export">Exportar CSV</button>
-              <button type="button" id="lead-clear" class="btn-danger">Apagar leads</button>
+      <section class="card open">
+        <div class="card-head"><div class="ico">🎵</div><div><h2>Música</h2><p>Use uma música sua — BPM, offset e notas são detectados sozinhos</p></div><span class="chev">▼</span></div>
+        <div class="card-body">
+          <div class="music-drop" id="music-drop">
+            <b>Escolher arquivo de música</b><br />
+            MP3, OGG ou WAV · a análise leva alguns segundos<br />
+            <span style="font-size:12px">⚠️ música em evento exige licença (ECAD) ou faixa royalty-free</span>
+          </div>
+          <div id="music-info" hidden>
+            <label class="field"><span>Música atual</span><input type="text" id="music-name" readonly /></label>
+            <div class="badges" id="music-badges" style="margin-top:10px"></div>
+            <audio id="music-audio" controls></audio>
+            <div style="display:flex;gap:10px;margin-top:12px">
+              <button class="btn" id="music-replace">Trocar música</button>
+              <button class="btn danger" id="music-remove">Remover (voltar ao sintetizado)</button>
             </div>
           </div>
-        </details>
-      </div>
+          <p class="hint" id="music-status"></p>
+          <label class="field"><span>Trilha sintetizada (usada sem música)</span>
+            <select id="a-track">
+              <option value="beat">Batida (bateria)</option>
+              <option value="metronome">Metrônomo</option>
+              <option value="arcade">Arcade (8-bit)</option>
+            </select>
+          </label>
+          <label class="field"><span>Volume</span>
+            <div class="slider-row"><input type="range" id="a-volume" min="0" max="1" step="0.05" /><output id="a-volume-out"></output></div>
+          </label>
+          <label class="switch-row"><span class="lbl">Som ao acertar nota<small>feedback sonoro imediato, como no osu!</small></span>
+            <span class="switch"><input type="checkbox" id="a-hitsounds" /><span class="track"></span></span>
+          </label>
+        </div>
+      </section>
 
-      <div class="preview-col">
-        <div class="device"><iframe id="preview" src="index.html?preview=1" title="prévia"></iframe></div>
-        <p class="preview-note">Prévia ao vivo — qualquer alteração recarrega o jogo com o rascunho. Toque na prévia para jogar.</p>
-      </div>
+      <section class="card open">
+        <div class="card-head"><div class="ico">⏱️</div><div><h2>Latência do aparelho</h2><p>Compensa o atraso do toque em cada totem/celular</p></div><span class="chev">▼</span></div>
+        <div class="card-body">
+          <div class="grid-2" style="align-items:end">
+            <label class="field"><span>Compensação (ms) — positivo se os toques saem “atrasados”</span><input type="number" id="g-inputOffset" min="-300" max="300" step="5" /></label>
+            <button class="btn" id="act-calibrate" style="height:44px">🎯 Calibrar tocando</button>
+          </div>
+          <p class="hint">A calibração toca 12 batidas — acompanhe tocando na tela. A mediana do seu desvio vira a compensação. Refaça em cada aparelho novo.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><div class="ico">📇</div><div><h2>Captura de leads</h2><p>Formulário de cadastro após o resultado (desligado por padrão)</p></div><span class="chev">▼</span></div>
+        <div class="card-body">
+          <label class="switch-row"><span class="lbl">Pedir cadastro após o resultado<small>nome, e-mail e telefone; o jogador pode pular</small></span>
+            <span class="switch"><input type="checkbox" id="l-enabled" /><span class="track"></span></span>
+          </label>
+          <label class="field"><span>Chamada do formulário</span><input type="text" id="l-headline" /></label>
+          <div class="leads-bar">
+            <span>Leads neste aparelho: <span id="lead-count">0</span></span>
+            <button class="btn" id="lead-export">Exportar CSV</button>
+            <button class="btn danger ghost" id="lead-clear">Apagar</button>
+          </div>
+        </div>
+      </section>
+
+      <footer>SB Rhythm · editor de tema · GSB</footer>
     </main>
 
     <script type="module" src="/src/editor/editor.ts"></script>

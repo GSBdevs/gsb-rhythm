@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
-import { generateDemoBeatmap, mulberry32, type Note } from '../../core/beatmap.js';
+import { generateDemoBeatmap, mulberry32, type Beatmap, type Note } from '../../core/beatmap.js';
 import { Conductor } from '../../core/conductor.js';
 import { DEFAULT_CONFIG, GameState, type HitResult } from '../../core/game-state.js';
 import { gradeFor, type Grade } from '../../core/grade.js';
 import { LeadStore, terminalId } from '../../data/lead-store.js';
+import { loadMusic } from '../../data/music-db.js';
+import { decodeToMono, playMusic } from '../audio/music.js';
 import { playHitSound, scheduleTrack } from '../audio/tracks.js';
 import { TriangleField } from '../fx/triangles.js';
 import { colorToNum, type NoteShape, type Theme } from '../theme.js';
@@ -32,12 +34,18 @@ export class GameScene extends Phaser.Scene {
   private noteVisuals = new Map<number, { body: Phaser.GameObjects.Graphics; ring: Phaser.GameObjects.Graphics; note: Note }>();
   private scoreText!: Phaser.GameObjects.Text;
   private comboText!: Phaser.GameObjects.Text;
+  private accText!: Phaser.GameObjects.Text;
   private countdownText!: Phaser.GameObjects.Text;
   private logo: Phaser.GameObjects.Container | null = null;
   private overlay: Phaser.GameObjects.GameObject[] = [];
   private lastCombo = 0;
   private lastCountdown = -1;
   private leadFormEl: HTMLElement | null = null;
+  /** deslocamento da grade de batida (music: chart.offsetMs/speed) p/ pulso visual */
+  private phaseOffsetMs = 0;
+  /** blob da música do operador, pré-carregado do IndexedDB no create */
+  private musicPromise: Promise<ArrayBuffer | null> | null = null;
+  private starting = false;
 
   constructor() {
     super('game');
@@ -49,19 +57,38 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     const g = this.theme.gameplay;
-    this.effectiveBpm = Phaser.Math.Clamp(g.bpm * g.speed, 30, 300);
-    const beatmap = generateDemoBeatmap({
-      bpm: this.effectiveBpm,
-      noteCount: g.noteCount,
-      rng: mulberry32(g.seed),
-      title: this.theme.name,
-    });
+    const chart = this.theme.audio.mode === 'music' ? this.theme.audio.chart : null;
+    let beatmap: Beatmap;
+    if (chart) {
+      // música real: tempos do chart escalados por speed (Double Time do osu!)
+      this.effectiveBpm = Phaser.Math.Clamp(chart.bpm * g.speed, 30, 300);
+      const beatMs = 60000 / this.effectiveBpm;
+      beatmap = {
+        title: this.theme.audio.musicName || this.theme.name,
+        bpm: this.effectiveBpm,
+        leadInMs: Math.max(1500, Math.round(beatMs * 4)),
+        notes: chart.notes.map((n) => ({ ...n, timeMs: Math.round(n.timeMs / g.speed) })),
+      };
+      this.phaseOffsetMs = chart.offsetMs / g.speed;
+      this.musicPromise = loadMusic().then((m) => (m ? m.blob.arrayBuffer() : null)).catch(() => null);
+    } else {
+      this.effectiveBpm = Phaser.Math.Clamp(g.bpm * g.speed, 30, 300);
+      beatmap = generateDemoBeatmap({
+        bpm: this.effectiveBpm,
+        noteCount: g.noteCount,
+        rng: mulberry32(g.seed),
+        title: this.theme.name,
+      });
+      this.phaseOffsetMs = 0;
+      this.musicPromise = null;
+    }
     this.state = new GameState(beatmap, { ...DEFAULT_CONFIG, approachMs: g.approachMs });
     this.conductor = new Conductor(beatmap.leadInMs);
     this.uiPhase = 'attract';
     this.noteVisuals.clear();
     this.lastCombo = 0;
     this.lastCountdown = -1;
+    this.starting = false;
 
     const c = this.theme.colors;
     this.cameras.main.setBackgroundColor(c.background);
@@ -78,6 +105,8 @@ export class GameScene extends Phaser.Scene {
 
     this.scoreText = this.text(WIDTH / 2, 110, '', 86, c.textPrimary, true).setDepth(10);
     this.comboText = this.text(WIDTH / 2, 205, '', 54, c.accent, true).setDepth(10);
+    // precisão ao vivo no canto superior direito, como no osu!
+    this.accText = this.text(WIDTH - 60, 90, '', 48, c.textPrimary, true).setOrigin(1, 0.5).setDepth(10);
     this.countdownText = this.text(WIDTH / 2, HEIGHT * 0.45, '', 260, c.accent, true).setDepth(25);
 
     this.showAttract();
@@ -103,24 +132,55 @@ export class GameScene extends Phaser.Scene {
     ];
   }
 
-  private startSong(): void {
+  private async startSong(): Promise<void> {
+    if (this.starting) return;
+    this.starting = true;
     this.clearOverlay();
-    this.uiPhase = 'playing';
-    this.state.start();
 
     // AudioContext só pode nascer depois de um gesto do usuário.
     this.audio = new AudioContext();
-    this.conductor.start(this.audio.currentTime * 1000);
 
-    const lastNote = this.state.beatmap.notes[this.state.beatmap.notes.length - 1];
+    // música do operador: decodifica ANTES de armar o relógio (evita atraso)
+    let musicBuffer: AudioBuffer | null = null;
+    if (this.musicPromise) {
+      const loading = this.text(WIDTH / 2, HEIGHT * 0.47, 'CARREGANDO…', 72, this.theme.colors.accent, true);
+      try {
+        const data = await this.musicPromise;
+        if (data) musicBuffer = (await decodeToMono(this.audio, data)).buffer;
+      } catch {
+        musicBuffer = null;
+      }
+      loading.destroy();
+    }
+
+    this.uiPhase = 'playing';
+    this.state.start();
+    this.conductor.start(this.audio.currentTime * 1000);
+    const zeroAtSec = this.conductor.zeroAtMs / 1000;
+    const speed = this.theme.gameplay.speed;
     const beatMs = 60000 / this.effectiveBpm;
-    scheduleTrack(this.audio, this.theme.audio.track, {
-      bpm: this.effectiveBpm,
-      fromBeat: -4,
-      toBeat: Math.ceil((lastNote?.timeMs ?? 0) / beatMs),
-      zeroAtSec: this.conductor.zeroAtMs / 1000,
-      volume: this.theme.audio.volume,
-    });
+    const lastNote = this.state.beatmap.notes[this.state.beatmap.notes.length - 1];
+
+    if (musicBuffer) {
+      playMusic(this.audio, musicBuffer, zeroAtSec, speed, this.theme.audio.volume);
+      // contagem de entrada audível (a música só começa no beat 0)
+      scheduleTrack(this.audio, 'metronome', {
+        bpm: this.effectiveBpm,
+        fromBeat: -4,
+        toBeat: -1,
+        zeroAtSec,
+        volume: this.theme.audio.volume * 0.8,
+      });
+    } else {
+      // modo synth — ou fallback se a música sumiu do IndexedDB
+      scheduleTrack(this.audio, this.theme.audio.track, {
+        bpm: this.effectiveBpm,
+        fromBeat: -4,
+        toBeat: Math.ceil((lastNote?.timeMs ?? 0) / beatMs),
+        zeroAtSec,
+        volume: this.theme.audio.volume,
+      });
+    }
   }
 
   private showResults(): void {
@@ -129,6 +189,7 @@ export class GameScene extends Phaser.Scene {
     this.countdownText.setText('');
     this.scoreText.setText('');
     this.comboText.setText('');
+    this.accText.setText('');
 
     const r = this.state.results();
     const grade = gradeFor(r.accuracy, r.counts.miss);
@@ -169,7 +230,7 @@ export class GameScene extends Phaser.Scene {
 
   private onTap(ptr: Phaser.Input.Pointer): void {
     if (this.uiPhase === 'attract') {
-      this.startSong();
+      void this.startSong();
       return;
     }
     if (this.uiPhase === 'results') {
@@ -177,7 +238,8 @@ export class GameScene extends Phaser.Scene {
       else this.scene.restart();
       return;
     }
-    const hit = this.state.tap(ptr.x / WIDTH, ptr.y / HEIGHT, this.songNowMs());
+    // compensação de latência calibrada: toque atrasado é adiantado no julgamento
+    const hit = this.state.tap(ptr.x / WIDTH, ptr.y / HEIGHT, this.songNowMs() - this.theme.gameplay.inputOffsetMs);
     if (hit) {
       this.resolveNoteVisual(hit.note.id);
       this.judgementPopup(hit);
@@ -211,6 +273,7 @@ export class GameScene extends Phaser.Scene {
 
     const r = this.state.results();
     this.scoreText.setText(`${r.score}`);
+    this.accText.setText(`${(r.accuracy * 100).toFixed(1).replace('.', ',')}%`);
     this.comboText.setText(r.combo > 1 ? `${r.combo}x` : '');
     if (r.combo > this.lastCombo && r.combo > 1) {
       this.comboText.setScale(1.35);
@@ -228,9 +291,9 @@ export class GameScene extends Phaser.Scene {
   /** 1 no instante da batida, decaindo até a próxima (dirige logo/triângulos). */
   private beatPulse(): number {
     const beatMs = 60000 / this.effectiveBpm;
-    const t = this.uiPhase === 'playing' && this.audio ? this.songNowMs() : this.time.now;
-    if (!Number.isFinite(t)) return 0;
-    const phase = (((t % beatMs) + beatMs) % beatMs) / beatMs;
+    const raw = this.uiPhase === 'playing' && this.audio ? this.songNowMs() - this.phaseOffsetMs : this.time.now;
+    if (!Number.isFinite(raw)) return 0;
+    const phase = (((raw % beatMs) + beatMs) % beatMs) / beatMs;
     return (1 - phase) ** 2;
   }
 
@@ -329,19 +392,26 @@ export class GameScene extends Phaser.Scene {
     const r = this.state.results();
     const grade = gradeFor(r.accuracy, r.counts.miss);
 
-    const inputCss = `font-size:30px;padding:20px;border-radius:14px;border:1px solid ${c.approach};background:#111;color:${c.textPrimary};outline:none;width:100%;box-sizing:border-box;`;
+    const inputCss = `font-size:30px;padding:22px 24px;border-radius:18px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:${c.textPrimary};outline:none;width:100%;box-sizing:border-box;transition:border-color .15s;`;
     const wrap = document.createElement('div');
     wrap.style.cssText =
-      'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.8);z-index:10;font-family:Arial,sans-serif;';
+      'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);z-index:10;font-family:Arial,sans-serif;';
     wrap.innerHTML = `
-      <form style="background:${c.background};border:2px solid ${c.accent};border-radius:28px;padding:40px;width:min(86vw,600px);display:flex;flex-direction:column;gap:18px;">
-        <h2 style="color:${c.accent};margin:0;text-align:center;font-size:34px;">${escapeHtml(this.theme.lead.headline)}</h2>
+      <style>
+        @keyframes sbLeadIn { from { transform: translateY(48px); opacity: 0; } to { transform: none; opacity: 1; } }
+        [data-lead-card] input:focus { border-color: ${c.accent} !important; }
+        [data-lead-card] input::placeholder { color: rgba(255,255,255,.35); }
+        [data-lead-card] button[type=submit]:active { transform: scale(.97); }
+      </style>
+      <form data-lead-card style="background:linear-gradient(170deg, rgba(255,255,255,.08), rgba(255,255,255,.02)) ${c.background};border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 80px rgba(0,0,0,.6);border-radius:32px;padding:48px 44px;width:min(88vw,620px);display:flex;flex-direction:column;gap:18px;animation:sbLeadIn .35s cubic-bezier(.2,.9,.3,1.2);">
+        <div style="width:64px;height:6px;border-radius:3px;background:${c.accent};margin:0 auto 6px;"></div>
+        <h2 style="color:${c.textPrimary};margin:0 0 6px;text-align:center;font-size:36px;line-height:1.25;">${escapeHtml(this.theme.lead.headline)}</h2>
         <input name="name" placeholder="Nome *" autocomplete="off" style="${inputCss}">
-        <input name="email" placeholder="E-mail *" autocomplete="off" style="${inputCss}">
-        <input name="phone" placeholder="Telefone" autocomplete="off" style="${inputCss}">
-        <div data-err style="color:${c.miss};font-size:26px;min-height:30px;text-align:center;"></div>
-        <button type="submit" style="font-size:34px;font-weight:bold;padding:22px;border-radius:16px;border:none;background:${c.accent};color:#000;cursor:pointer;">ENVIAR</button>
-        <button type="button" data-skip style="font-size:26px;padding:10px;border:none;background:none;color:${c.approach};cursor:pointer;">pular</button>
+        <input name="email" placeholder="E-mail *" autocomplete="off" inputmode="email" style="${inputCss}">
+        <input name="phone" placeholder="Telefone (opcional)" autocomplete="off" inputmode="tel" style="${inputCss}">
+        <div data-err style="color:${c.miss};font-size:25px;min-height:30px;text-align:center;"></div>
+        <button type="submit" style="font-size:32px;font-weight:bold;letter-spacing:.06em;padding:24px;border-radius:20px;border:none;background:${c.accent};color:#000;cursor:pointer;box-shadow:0 10px 30px ${c.accent}44;transition:transform .1s;">ENVIAR</button>
+        <button type="button" data-skip style="font-size:24px;padding:8px;border:none;background:none;color:rgba(255,255,255,.4);cursor:pointer;">agora não</button>
       </form>`;
     document.body.appendChild(wrap);
     this.leadFormEl = wrap;
@@ -373,7 +443,12 @@ export class GameScene extends Phaser.Scene {
         terminalId: terminalId(),
         timestamp: new Date().toISOString(),
       });
-      wrap.innerHTML = `<div style="color:${c.accent};font-size:64px;font-weight:bold;font-family:Arial,sans-serif;">OBRIGADO!</div>`;
+      wrap.innerHTML = `
+        <div style="text-align:center;font-family:Arial,sans-serif;">
+          <div style="font-size:110px;line-height:1;">🎉</div>
+          <div style="color:${c.accent};font-size:64px;font-weight:bold;margin-top:12px;">OBRIGADO!</div>
+          <div style="color:${c.textPrimary};font-size:30px;opacity:.7;margin-top:10px;">Boa sorte no sorteio</div>
+        </div>`;
       window.setTimeout(() => this.closeLeadFormAndRestart(), 1500);
     });
     (wrap.querySelector('[data-skip]') as HTMLElement).addEventListener('click', () => this.closeLeadFormAndRestart());

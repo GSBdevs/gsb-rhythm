@@ -48,35 +48,43 @@ export function mulberry32(seed: number): () => number {
 }
 
 /**
- * Gera um beatmap de demonstração: uma nota por batida, posições aleatórias
- * mas com distância mínima da nota anterior (mão alcança, não sobrepõe).
+ * Sorteia posições para uma lista de tempos: aleatórias, mas com distância
+ * mínima da nota anterior (mão alcança, não sobrepõe). Compartilhado entre o
+ * beatmap demo e o chart gerado de música real.
  */
-export function generateDemoBeatmap(opts: DemoBeatmapOptions): Beatmap {
-  const area = opts.area ?? DEFAULT_AREA;
-  const minGap = opts.minGap ?? 0.12;
-  const beatMs = 60000 / opts.bpm;
+export function placeNotes(
+  timesMs: readonly number[],
+  rng: () => number,
+  area = DEFAULT_AREA,
+  minGap = 0.12,
+): Note[] {
   const notes: Note[] = [];
   let prevX = 0.5;
   let prevY = 0.5;
-
-  for (let i = 0; i < opts.noteCount; i++) {
+  for (let i = 0; i < timesMs.length; i++) {
     let x = prevX;
     let y = prevY;
     // rejeita posições coladas na anterior (limite de tentativas evita loop infinito)
     for (let attempt = 0; attempt < 20; attempt++) {
-      x = area.minX + opts.rng() * (area.maxX - area.minX);
-      y = area.minY + opts.rng() * (area.maxY - area.minY);
+      x = area.minX + rng() * (area.maxX - area.minX);
+      y = area.minY + rng() * (area.maxY - area.minY);
       if (Math.hypot(x - prevX, y - prevY) >= minGap) break;
     }
-    notes.push({ id: i, timeMs: Math.round(i * beatMs), x, y });
+    notes.push({ id: i, timeMs: Math.round(timesMs[i] ?? 0), x, y });
     prevX = x;
     prevY = y;
   }
+  return notes;
+}
 
+/** Gera um beatmap de demonstração: uma nota por batida. */
+export function generateDemoBeatmap(opts: DemoBeatmapOptions): Beatmap {
+  const beatMs = 60000 / opts.bpm;
+  const times = Array.from({ length: opts.noteCount }, (_, i) => i * beatMs);
   return {
     title: opts.title ?? 'Demo',
     bpm: opts.bpm,
     leadInMs: Math.round(beatMs * 4),
-    notes,
+    notes: placeNotes(times, opts.rng, opts.area ?? DEFAULT_AREA, opts.minGap ?? 0.12),
   };
 }

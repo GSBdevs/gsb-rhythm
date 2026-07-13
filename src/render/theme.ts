@@ -10,8 +10,12 @@
  *   4. themes/gsb-default/theme.json → DEFAULT_THEME
  */
 
+import type { Chart } from '../core/chart.js';
+
 export type NoteShape = 'circle' | 'square' | 'diamond' | 'hexagon' | 'star';
 export type TrackStyle = 'metronome' | 'beat' | 'arcade';
+/** synth = trilha sintetizada; music = arquivo de música do operador (IndexedDB) */
+export type AudioMode = 'synth' | 'music';
 
 export const PREVIEW_KEY = 'sbRhythmThemeDraft';
 export const APPLIED_KEY = 'sbRhythmActiveTheme';
@@ -45,12 +49,22 @@ export interface Theme {
     seed: number;
     /** multiplicador de velocidade/dificuldade (0.5 = fácil, 2 = expert) */
     speed: number;
+    /**
+     * compensação de latência do aparelho em ms (calibrada no editor):
+     * positivo = os toques chegam atrasados e são adiantados no julgamento.
+     */
+    inputOffsetMs: number;
   };
   audio: {
+    mode: AudioMode;
     track: TrackStyle;
     /** 0..1 */
     volume: number;
     hitSounds: boolean;
+    /** nome do arquivo de música do operador (áudio vive no IndexedDB) */
+    musicName: string;
+    /** beatmap gerado automaticamente da música (equivalente ao .osu) */
+    chart: Chart | null;
   };
   lead: {
     enabled: boolean;
@@ -86,11 +100,15 @@ export const DEFAULT_THEME: Theme = {
     approachMs: 900,
     seed: 7,
     speed: 1,
+    inputOffsetMs: 0,
   },
   audio: {
+    mode: 'synth',
     track: 'beat',
     volume: 0.8,
     hitSounds: true,
+    musicName: '',
+    chart: null,
   },
   lead: {
     enabled: false,
@@ -100,6 +118,40 @@ export const DEFAULT_THEME: Theme = {
 
 const NOTE_SHAPES: readonly NoteShape[] = ['circle', 'square', 'diamond', 'hexagon', 'star'];
 const TRACK_STYLES: readonly TrackStyle[] = ['metronome', 'beat', 'arcade'];
+const AUDIO_MODES: readonly AudioMode[] = ['synth', 'music'];
+
+/** Sanitiza um chart vindo de JSON: notas válidas, ordenadas, ids reindexados. */
+function pickChart(raw: unknown): Chart | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const bpm = r['bpm'];
+  const offsetMs = r['offsetMs'];
+  const durationMs = r['durationMs'];
+  if (typeof bpm !== 'number' || bpm < 30 || bpm > 300) return null;
+  if (typeof offsetMs !== 'number' || !Number.isFinite(offsetMs)) return null;
+  if (typeof durationMs !== 'number' || durationMs <= 0) return null;
+  const rawNotes = Array.isArray(r['notes']) ? r['notes'] : [];
+  const notes = rawNotes
+    .filter((n): n is Record<string, unknown> => typeof n === 'object' && n !== null)
+    .map((n) => ({ timeMs: n['timeMs'], x: n['x'], y: n['y'] }))
+    .filter(
+      (n): n is { timeMs: number; x: number; y: number } =>
+        typeof n.timeMs === 'number' &&
+        Number.isFinite(n.timeMs) &&
+        typeof n.x === 'number' &&
+        typeof n.y === 'number',
+    )
+    .slice(0, 1000)
+    .sort((a, b) => a.timeMs - b.timeMs)
+    .map((n, i) => ({
+      id: i,
+      timeMs: Math.round(n.timeMs),
+      x: Math.min(1, Math.max(0, n.x)),
+      y: Math.min(1, Math.max(0, n.y)),
+    }));
+  if (notes.length === 0) return null;
+  return { bpm, offsetMs: Math.round(offsetMs), durationMs: Math.round(durationMs), notes };
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -160,11 +212,15 @@ export function resolveTheme(raw: unknown): Theme {
       approachMs: pickNumber(gameplay['approachMs'], d.gameplay.approachMs, 300, 3000),
       seed: pickNumber(gameplay['seed'], d.gameplay.seed, 0, 2 ** 31),
       speed: pickNumber(gameplay['speed'], d.gameplay.speed, 0.5, 2),
+      inputOffsetMs: pickNumber(gameplay['inputOffsetMs'], d.gameplay.inputOffsetMs, -300, 300),
     },
     audio: {
+      mode: AUDIO_MODES.includes(audio['mode'] as AudioMode) ? (audio['mode'] as AudioMode) : d.audio.mode,
       track: TRACK_STYLES.includes(track as TrackStyle) ? (track as TrackStyle) : d.audio.track,
       volume: pickNumber(audio['volume'], d.audio.volume, 0, 1),
       hitSounds: pickBool(audio['hitSounds'], d.audio.hitSounds),
+      musicName: typeof audio['musicName'] === 'string' ? audio['musicName'] : d.audio.musicName,
+      chart: pickChart(audio['chart']),
     },
     lead: {
       enabled: pickBool(lead['enabled'], d.lead.enabled),

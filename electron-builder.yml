@@ -1,0 +1,15 @@
+# target dir+zip e signAndEditExecutable:false — winCodeSign falha sem
+# privilégio de symlink (gotcha resolvido no kiosk-maze)
+appId: com.gsb.sbrhythm
+productName: SB Rhythm
+directories:
+  output: release
+files:
+  - dist/**
+  - shell/**
+  - package.json
+win:
+  target:
+    - dir
+    - zip
+  signAndEditExecutable: false
