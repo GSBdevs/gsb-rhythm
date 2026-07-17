@@ -3,10 +3,11 @@ import { generateDemoBeatmap, mulberry32, type Beatmap, type Note } from '../../
 import { Conductor } from '../../core/conductor.js';
 import { DEFAULT_CONFIG, GameState, type HitResult } from '../../core/game-state.js';
 import { gradeFor, type Grade } from '../../core/grade.js';
-import { LeadStore, terminalId } from '../../data/lead-store.js';
+import { CSV_BOM, LeadStore, leadsToCsv, terminalId } from '../../data/lead-store.js';
 import { loadMusic } from '../../data/music-db.js';
 import { decodeToMono, playMusic } from '../audio/music.js';
 import { playHitSound, scheduleTrack } from '../audio/tracks.js';
+import { mirrorLeadsCsvNative } from '../../platform/native-store.js';
 import { TriangleField } from '../fx/triangles.js';
 import { colorToNum, type NoteShape, type Theme } from '../theme.js';
 
@@ -432,7 +433,8 @@ export class GameScene extends Phaser.Scene {
         err.textContent = 'E-mail inválido.';
         return;
       }
-      new LeadStore(window.localStorage).save({
+      const store = new LeadStore(window.localStorage);
+      store.save({
         name,
         email,
         phone,
@@ -443,6 +445,9 @@ export class GameScene extends Phaser.Scene {
         terminalId: terminalId(),
         timestamp: new Date().toISOString(),
       });
+      // Android: espelha o CSV consolidado em disco (pasta acessivel por USB),
+      // como no maze-game. Best-effort — no web/Electron e no-op.
+      void mirrorLeadsCsvNative(CSV_BOM + leadsToCsv(store.all()));
       wrap.innerHTML = `
         <div style="text-align:center;font-family:Arial,sans-serif;">
           <div style="font-size:110px;line-height:1;">🎉</div>

@@ -17,8 +17,17 @@ npm run electron     # build + abre no Electron (Windows)
 npm run dist         # gera release/win-unpacked + .zip (electron-builder)
 npm run android:sync # build + sincroniza no projeto android/ (Capacitor)
 npm run android:open # abre no Android Studio (exige SDK)
+npm run android:apk  # gera o APK direto (Gradle assembleDebug, acha o JDK sozinho)
 npm run deploy       # publica dist/ no GitHub Pages (branch gh-pages)
 ```
+
+Build Android: o primeiro build baixa o Gradle e as dependências (demora); os
+seguintes reutilizam os caches (`org.gradle.caching`/`parallel` ligados em
+`android/gradle.properties`). O APK sai assinado com a keystore de debug em
+`android/app/build/outputs/apk/debug/app-debug.apk` — instala direto no
+aparelho (o `release` do template Capacitor não tem assinatura configurada).
+Electron: `npm run dist` gera `release/win-unpacked/` + `.zip`, sem assinatura
+de código (alvo `dir`+`zip` dispensa o winCodeSign).
 
 ## Editor de tema (operador)
 
@@ -30,7 +39,12 @@ npm run deploy       # publica dist/ no GitHub Pages (branch gh-pages)
 - **calibração de latência** por aparelho ("Calibrar tocando");
 - captura de leads (desligada por padrão) com exportação CSV.
 
-"Testar jogo" abre o rascunho; "Aplicar e voltar" persiste no aparelho.
+"Testar jogo" abre o rascunho; "Aplicar e voltar" persiste no aparelho
+(localStorage + backup em disco no Android — sobrevive a reaberturas).
+"Exportar tema"/CSV: download no web/Electron; no Android abre a folha nativa
+de compartilhamento (e-mail/Drive/WhatsApp). No Android o CSV consolidado
+também é espelhado em `/Android/data/com.gsb.sbrhythm/files/leads/leads.csv`
+(acessível por USB).
 
 ## Overrides de URL
 

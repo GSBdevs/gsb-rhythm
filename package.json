@@ -16,11 +16,14 @@
     "dist": "npm run build && electron-builder",
     "android:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android",
+    "android:apk": "npm run android:sync && node scripts/build-android.cjs",
     "deploy": "npm run build && gh-pages -d dist"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",
     "@capacitor/core": "^6.2.1",
+    "@capacitor/filesystem": "^6.0.4",
+    "@capacitor/share": "^6.0.4",
     "gh-pages": "^6.3.0",
     "phaser": "^3.87.0"
   },

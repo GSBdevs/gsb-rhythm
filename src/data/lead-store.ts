@@ -52,29 +52,52 @@ export class LeadStore {
   }
 }
 
-function csvEscape(v: string): string {
-  return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+// Formato COMUM aos tres jogos (maze/memoria/rhythm), desenhado para o Excel
+// pt-BR: separador `;` (padrao da localidade), BOM UTF-8 na gravacao (CSV_BOM),
+// data/hora locais em colunas separadas, cabecalhos em portugues e linhas em
+// ordem cronologica. Os metadados (data;hora;terminal;jogo;pontuacao) casam com
+// os outros dois; as colunas de campo aqui sao fixas (nome/email/telefone).
+
+const CSV_SEP = ';';
+
+/** BOM (U+FEFF) para o Excel abrir UTF-8 com acentuacao correta. */
+export const CSV_BOM = String.fromCharCode(0xfeff);
+
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+/** ISO 8601 -> [dd/mm/aaaa, hh:mm:ss] no fuso local (mantem o cru se invalido). */
+function localDateTime(iso: string): [string, string] {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return [iso, ''];
+  return [
+    `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`,
+    `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`,
+  ];
 }
 
-/** CSV RFC 4180, colunas fixas, precisão em % com vírgula (pt-BR). */
+function csvEscape(v: string): string {
+  return /[";\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+}
+
 export function leadsToCsv(leads: readonly Lead[]): string {
-  const header = 'timestamp,terminalId,themeName,name,email,phone,score,accuracy,grade';
-  const rows = leads.map((l) =>
-    [
-      l.timestamp,
+  const sorted = [...leads].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const header = ['data', 'hora', 'terminal', 'jogo', 'pontuacao', 'nome', 'email', 'telefone', 'precisao', 'nota'];
+  const rows = sorted.map((l) => {
+    const [data, hora] = localDateTime(l.timestamp);
+    return [
+      data,
+      hora,
       l.terminalId,
       l.themeName,
+      String(l.score),
       l.name,
       l.email,
       l.phone,
-      String(l.score),
       `${(l.accuracy * 100).toFixed(1).replace('.', ',')}%`,
       l.grade,
-    ]
-      .map(csvEscape)
-      .join(','),
-  );
-  return [header, ...rows].join('\r\n');
+    ];
+  });
+  return [header, ...rows].map((row) => row.map(csvEscape).join(CSV_SEP)).join('\r\n');
 }
 
 /** id do totem: ?terminal=<id>, default totem-01 (consolidação manual pós-evento). */

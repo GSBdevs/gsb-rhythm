@@ -7,10 +7,12 @@
  *   1. ?preview=1        → rascunho do editor (localStorage PREVIEW_KEY)
  *   2. ?theme=<id>       → fetch themes/<id>/theme.json
  *   3. tema aplicado     → localStorage APPLIED_KEY (editor "Aplicar")
- *   4. themes/gsb-default/theme.json → DEFAULT_THEME
+ *   4. backup nativo     → applied-theme.json em disco (Android/Capacitor)
+ *   5. themes/gsb-default/theme.json → DEFAULT_THEME
  */
 
 import type { Chart } from '../core/chart.js';
+import { loadAppliedThemeNative } from '../platform/native-store.js';
 
 export type NoteShape = 'circle' | 'square' | 'diamond' | 'hexagon' | 'star';
 export type TrackStyle = 'metronome' | 'beat' | 'arcade';
@@ -249,6 +251,12 @@ async function fromFetch(id: string): Promise<Theme | null> {
   }
 }
 
+/** Backup em disco do Android (o WebView pode descartar o localStorage). */
+async function fromNativeBackup(): Promise<Theme | null> {
+  const raw = await loadAppliedThemeNative();
+  return raw === null ? null : resolveTheme(raw);
+}
+
 /** Resolve a fonte do tema pela prioridade documentada no topo do arquivo. */
 export async function loadTheme(): Promise<Theme> {
   const params = new URLSearchParams(window.location.search);
@@ -259,7 +267,12 @@ export async function loadTheme(): Promise<Theme> {
   if (explicit) {
     return (await fromFetch(explicit)) ?? structuredClone(DEFAULT_THEME);
   }
-  return fromStorage(APPLIED_KEY) ?? (await fromFetch('gsb-default')) ?? structuredClone(DEFAULT_THEME);
+  return (
+    fromStorage(APPLIED_KEY) ??
+    (await fromNativeBackup()) ??
+    (await fromFetch('gsb-default')) ??
+    structuredClone(DEFAULT_THEME)
+  );
 }
 
 /** '#rrggbb' → número Phaser. */

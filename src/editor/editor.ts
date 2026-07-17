@@ -9,8 +9,10 @@
 import { analyzeAudio } from '../core/audio-analysis.js';
 import { mulberry32 } from '../core/beatmap.js';
 import { generateChart, type Chart } from '../core/chart.js';
-import { LeadStore, leadsToCsv } from '../data/lead-store.js';
+import { CSV_BOM, LeadStore, leadsToCsv } from '../data/lead-store.js';
 import { deleteMusic, loadMusic, saveMusic } from '../data/music-db.js';
+import { exportTextFile } from '../platform/file-export.js';
+import { saveAppliedThemeNative } from '../platform/native-store.js';
 import { decodeToMono } from '../render/audio/music.js';
 import {
   APPLIED_KEY,
@@ -285,12 +287,10 @@ async function runCalibration(): Promise<void> {
 
 // ---------------------------------------------------------------- ações
 
+// No Android a ancora <a download> nao funciona — o helper decide entre
+// download (web/Electron) e folha de compartilhamento nativa (Capacitor).
 function download(name: string, content: string, mime: string): void {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([content], { type: mime }));
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  void exportTextFile(name, content, mime);
 }
 
 function refreshLeadCount(): void {
@@ -333,8 +333,13 @@ function wire(): void {
   });
 
   $('act-apply').addEventListener('click', () => {
-    window.localStorage.setItem(APPLIED_KEY, JSON.stringify(buildTheme()));
-    window.location.href = 'index.html';
+    const json = JSON.stringify(buildTheme());
+    window.localStorage.setItem(APPLIED_KEY, json);
+    // No Android grava tambem em disco (backup: o WebView pode descartar o
+    // localStorage); so navega depois, senao o unload cancela a escrita.
+    void saveAppliedThemeNative(json).finally(() => {
+      window.location.href = 'index.html';
+    });
   });
 
   $('act-download').addEventListener('click', () => {
@@ -382,7 +387,7 @@ function wire(): void {
 
   // leads
   $('lead-export').addEventListener('click', () => {
-    download('leads.csv', leadsToCsv(new LeadStore(window.localStorage).all()), 'text/csv');
+    download('leads.csv', CSV_BOM + leadsToCsv(new LeadStore(window.localStorage).all()), 'text/csv');
   });
   $('lead-clear').addEventListener('click', () => {
     const store = new LeadStore(window.localStorage);
