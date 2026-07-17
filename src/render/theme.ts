@@ -163,6 +163,15 @@ function pickString(raw: unknown, fallback: string): string {
   return typeof raw === 'string' && raw.length > 0 ? raw : fallback;
 }
 
+/**
+ * Texto visível ao usuário: STRING VAZIA É VÁLIDA (o operador pode querer o
+ * elemento em branco) — só cai no default quando o campo nem é string.
+ * `pickString` continua estrito para name/ids, onde '' atrapalharia.
+ */
+function pickText(raw: unknown, fallback: string): string {
+  return typeof raw === 'string' ? raw : fallback;
+}
+
 function pickColor(raw: unknown, fallback: string): string {
   return typeof raw === 'string' && /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : fallback;
 }
@@ -201,11 +210,11 @@ export function resolveTheme(raw: unknown): Theme {
       miss: pickColor(colors['miss'], d.colors.miss),
     },
     texts: {
-      title: pickString(texts['title'], d.texts.title),
-      subtitle: pickString(texts['subtitle'], d.texts.subtitle),
-      startCta: pickString(texts['startCta'], d.texts.startCta),
-      resultsTitle: pickString(texts['resultsTitle'], d.texts.resultsTitle),
-      playAgainCta: pickString(texts['playAgainCta'], d.texts.playAgainCta),
+      title: pickText(texts['title'], d.texts.title),
+      subtitle: pickText(texts['subtitle'], d.texts.subtitle),
+      startCta: pickText(texts['startCta'], d.texts.startCta),
+      resultsTitle: pickText(texts['resultsTitle'], d.texts.resultsTitle),
+      playAgainCta: pickText(texts['playAgainCta'], d.texts.playAgainCta),
     },
     noteShape: NOTE_SHAPES.includes(shape as NoteShape) ? (shape as NoteShape) : d.noteShape,
     gameplay: {
@@ -226,7 +235,7 @@ export function resolveTheme(raw: unknown): Theme {
     },
     lead: {
       enabled: pickBool(lead['enabled'], d.lead.enabled),
-      headline: pickString(lead['headline'], d.lead.headline),
+      headline: pickText(lead['headline'], d.lead.headline),
     },
   };
 }

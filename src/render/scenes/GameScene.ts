@@ -47,6 +47,10 @@ export class GameScene extends Phaser.Scene {
   /** blob da música do operador, pré-carregado do IndexedDB no create */
   private musicPromise: Promise<ArrayBuffer | null> | null = null;
   private starting = false;
+  // Pausa: audio.suspend() congela o relógio-mestre (som + julgamento juntos).
+  private paused = false;
+  private pauseUi: Phaser.GameObjects.GameObject[] = [];
+  private pauseBtn: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super('game');
@@ -90,6 +94,9 @@ export class GameScene extends Phaser.Scene {
     this.lastCombo = 0;
     this.lastCountdown = -1;
     this.starting = false;
+    this.paused = false;
+    this.pauseUi = [];
+    this.pauseBtn = null;
 
     const c = this.theme.colors;
     this.cameras.main.setBackgroundColor(c.background);
@@ -155,6 +162,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.uiPhase = 'playing';
+    this.buildPauseButton();
     this.state.start();
     this.conductor.start(this.audio.currentTime * 1000);
     const zeroAtSec = this.conductor.zeroAtMs / 1000;
@@ -186,6 +194,8 @@ export class GameScene extends Phaser.Scene {
 
   private showResults(): void {
     this.uiPhase = 'results';
+    this.pauseBtn?.destroy();
+    this.pauseBtn = null;
     this.stopAudio();
     this.countdownText.setText('');
     this.scoreText.setText('');
@@ -230,6 +240,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- input
 
   private onTap(ptr: Phaser.Input.Pointer): void {
+    if (this.paused) return; // toques do menu de pausa não julgam notas
     if (this.uiPhase === 'attract') {
       void this.startSong();
       return;
@@ -253,6 +264,7 @@ export class GameScene extends Phaser.Scene {
   // ---------------------------------------------------------------- loop
 
   override update(_time: number, delta: number): void {
+    if (this.paused) return;
     this.triangles.update(delta, this.beatPulse());
 
     if (this.logo && this.uiPhase !== 'playing') {
@@ -283,6 +295,53 @@ export class GameScene extends Phaser.Scene {
     this.lastCombo = r.combo;
 
     if (this.state.currentPhase === 'finished') this.showResults();
+  }
+
+  // ---------------------------------------------------------------- pausa
+
+  private buildPauseButton(): void {
+    this.pauseBtn = this.text(70, 90, '⏸', 64, this.theme.colors.textPrimary, true)
+      .setInteractive({ useHandCursor: true });
+    this.pauseBtn.on('pointerdown', () => this.togglePause());
+    this.input.keyboard?.on('keydown-ESC', () => this.togglePause());
+  }
+
+  private togglePause(): void {
+    if (this.uiPhase !== 'playing') return;
+    if (this.paused) this.resumePause();
+    else this.enterPause();
+  }
+
+  private enterPause(): void {
+    this.paused = true;
+    // suspend() congela audio.currentTime -> música, notas e julgamento
+    // param juntos e retomam em sincronia perfeita no resume().
+    void this.audio?.suspend();
+    this.tweens.pauseAll();
+    const c = this.theme.colors;
+    const bg = this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x000000, 0.75).setOrigin(0).setDepth(40).setInteractive();
+    const title = this.text(WIDTH / 2, HEIGHT * 0.32, 'PAUSADO', 110, c.textPrimary, true).setDepth(41);
+    const resume = this.pauseButton(HEIGHT * 0.46, 'RETOMAR', c.accent, () => this.resumePause());
+    const menu = this.pauseButton(HEIGHT * 0.56, 'MENU INICIAL', c.approach, () => this.scene.restart());
+    this.pauseUi = [bg, title, resume, menu];
+  }
+
+  private pauseButton(y: number, label: string, bgColor: string, cb: () => void): Phaser.GameObjects.Text {
+    const t = this.text(WIDTH / 2, y, label, 56, this.theme.colors.background, true)
+      .setDepth(41)
+      .setPadding(46, 22, 46, 22)
+      .setInteractive({ useHandCursor: true });
+    t.setBackgroundColor(bgColor);
+    t.on('pointerdown', cb);
+    return t;
+  }
+
+  private resumePause(): void {
+    this.paused = false;
+    void this.audio?.resume();
+    this.tweens.resumeAll();
+    for (const o of this.pauseUi) o.destroy();
+    this.pauseUi = [];
   }
 
   private songNowMs(): number {
