@@ -34,10 +34,14 @@ de código (alvo `dir`+`zip` dispensa o winCodeSign).
 `/editor.html` (ou botão ⚙ dentro do jogo):
 - identidade/textos, cores, forma das notas;
 - **dificuldade e velocidade** (presets Fácil→Expert + slider 0.5x–2x);
+- **imagens**: ícone/logo na tela inicial + papel de parede durante o jogo;
 - **música própria**: escolha um MP3/OGG/WAV — BPM, offset e notas são detectados
   automaticamente (ver [BEATMAP-SISTEMA.md](BEATMAP-SISTEMA.md));
 - **calibração de latência** por aparelho ("Calibrar tocando");
 - captura de leads (desligada por padrão) com exportação CSV.
+
+O ícone do app (APK/Electron) é gerado por código — `npm run icons`, ver
+[docs/ICONE.md](docs/ICONE.md).
 
 "Testar jogo" abre o rascunho; "Aplicar e voltar" persiste no aparelho
 (localStorage + backup em disco no Android — sobrevive a reaberturas).
@@ -51,6 +55,9 @@ também é espelhado em `/Android/data/com.gsb.sbrhythm/files/leads/leads.csv`
 - `?theme=<id>` — carrega `public/themes/<id>/theme.json` (default `gsb-default`).
 - `?preview=1` — abre com o rascunho do editor.
 - `?terminal=<id>` — identifica o totem nos leads (default `totem-01`).
+- `?idle=<ms>` — tempo de inatividade p/ voltar à tela inicial (default 45000; 0 desliga).
+- `?fullscreen=1` — entra em tela cheia no primeiro toque (kiosk web/PWA).
+- `?fps=1` — mostra o FPS no canto (diagnóstico de performance no totem).
 
 ## Documentação
 

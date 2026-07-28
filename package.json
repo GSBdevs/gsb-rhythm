@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "icons": "node scripts/generate-icon.cjs && npx capacitor-assets generate --android --iconBackgroundColor #0f0f14 --iconBackgroundColorDark #0f0f14 --splashBackgroundColor #0f0f14 --splashBackgroundColorDark #0f0f14",
     "electron": "npm run build && electron .",
     "electron:run": "electron .",
     "dist": "npm run build && electron-builder",
@@ -28,6 +29,7 @@
     "phaser": "^3.87.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^6.2.1",
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",

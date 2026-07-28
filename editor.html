@@ -154,6 +154,26 @@
       .switch input:checked + .track { background: var(--accent); }
       .switch input:checked + .track::after { transform: translateX(20px); }
 
+      /* ---------- imagens ---------- */
+      .img-slot { display: flex; flex-direction: column; gap: 8px; }
+      .img-row { display: flex; align-items: center; gap: 14px; }
+      .img-actions { display: flex; flex-direction: column; gap: 8px; }
+      .img-thumb {
+        width: 96px; height: 96px; flex: none; border-radius: 12px;
+        border: 1.5px dashed #3a3a44; background: #101014 center/contain no-repeat;
+        display: grid; place-items: center; color: var(--muted); font-size: 11px; text-align: center;
+        /* xadrez discreto p/ enxergar transparência do PNG */
+        background-image:
+          linear-gradient(45deg, #1a1a1e 25%, transparent 25%),
+          linear-gradient(-45deg, #1a1a1e 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #1a1a1e 75%),
+          linear-gradient(-45deg, transparent 75%, #1a1a1e 75%);
+        background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      }
+      .img-thumb.wide { width: 108px; height: 168px; }
+      .img-thumb:not([data-empty]) { border-style: solid; border-color: var(--border); }
+      .img-thumb:not([data-empty]) span { display: none; }
+
       /* ---------- música ---------- */
       .music-drop {
         border: 1.5px dashed #3a3a44; border-radius: 14px; padding: 26px;
@@ -263,6 +283,35 @@
       </section>
 
       <section class="card open">
+        <div class="card-head"><div class="ico">🖼️</div><div><h2>Imagens</h2><p>Ícone da tela inicial e papel de parede do jogo</p></div><span class="chev">▼</span></div>
+        <div class="card-body">
+          <div class="img-slot">
+            <div class="field"><span>Ícone / logo da tela inicial (PNG com fundo transparente)</span></div>
+            <div class="img-row">
+              <div class="img-thumb" id="img-icon-thumb" data-empty="1">sem imagem</div>
+              <div class="img-actions">
+                <button class="btn" id="img-icon-pick">Escolher imagem</button>
+                <button class="btn danger ghost" id="img-icon-remove" hidden>Remover</button>
+              </div>
+            </div>
+            <input type="file" id="img-icon-file" accept="image/*" hidden />
+          </div>
+          <div class="img-slot">
+            <div class="field"><span>Papel de parede durante o jogo (cobre a tela — vertical fica melhor)</span></div>
+            <div class="img-row">
+              <div class="img-thumb wide" id="img-wall-thumb" data-empty="1">sem imagem</div>
+              <div class="img-actions">
+                <button class="btn" id="img-wall-pick">Escolher imagem</button>
+                <button class="btn danger ghost" id="img-wall-remove" hidden>Remover</button>
+              </div>
+            </div>
+            <input type="file" id="img-wall-file" accept="image/*" hidden />
+          </div>
+          <p class="hint">As imagens são redimensionadas ao importar e ficam salvas no tema (viajam no exportar/importar). Deixe vazio para usar só as cores.</p>
+        </div>
+      </section>
+
+      <section class="card open">
         <div class="card-head"><div class="ico">⚡</div><div><h2>Dificuldade e velocidade</h2><p>Presets prontos ou ajuste fino</p></div><span class="chev">▼</span></div>
         <div class="card-body">
           <div class="segmented" id="preset-picker">
@@ -333,10 +382,14 @@
       <section class="card">
         <div class="card-head"><div class="ico">📇</div><div><h2>Captura de leads</h2><p>Formulário de cadastro após o resultado (desligado por padrão)</p></div><span class="chev">▼</span></div>
         <div class="card-body">
-          <label class="switch-row"><span class="lbl">Pedir cadastro após o resultado<small>nome, e-mail e telefone; o jogador pode pular</small></span>
+          <label class="switch-row"><span class="lbl">Pedir cadastro após o resultado<small>nome, e-mail e telefone</small></span>
             <span class="switch"><input type="checkbox" id="l-enabled" /><span class="track"></span></span>
           </label>
           <label class="field"><span>Chamada do formulário</span><input type="text" id="l-headline" /></label>
+          <label class="switch-row"><span class="lbl">Cadastro obrigatório<small>remove o botão “agora não” — o jogador precisa preencher</small></span>
+            <span class="switch"><input type="checkbox" id="l-required" /><span class="track"></span></span>
+          </label>
+          <label class="field"><span>Termo de consentimento (LGPD) — vazio esconde o checkbox</span><input type="text" id="l-consent" /></label>
           <div class="leads-bar">
             <span>Leads neste aparelho: <span id="lead-count">0</span></span>
             <button class="btn" id="lead-export">Exportar CSV</button>

@@ -36,4 +36,18 @@ describe('resolveTheme', () => {
     expect(resolveTheme({ gameplay: { speed: 2 } }).gameplay.speed).toBe(2);
     expect(resolveTheme({ audio: { track: 'dubstep' } }).audio.track).toBe(DEFAULT_THEME.audio.track);
   });
+
+  it('images aceita data/blob/http e rejeita o resto', () => {
+    const dataUri = 'data:image/png;base64,iVBORw0KGgo=';
+    expect(resolveTheme({ images: { startIcon: dataUri, wallpaper: 'blob:xyz' } }).images).toEqual({
+      startIcon: dataUri,
+      wallpaper: 'blob:xyz',
+    });
+    // URIs perigosas ou inválidas viram '' (sem imagem)
+    expect(resolveTheme({ images: { startIcon: 'javascript:alert(1)', wallpaper: 'data:text/html,x' } }).images).toEqual({
+      startIcon: '',
+      wallpaper: '',
+    });
+    expect(resolveTheme({}).images).toEqual({ startIcon: '', wallpaper: '' });
+  });
 });

@@ -44,6 +44,17 @@ export interface Theme {
     playAgainCta: string;
   };
   noteShape: NoteShape;
+  /**
+   * Imagens do operador, como data-URI (ou '' quando ausente). Ficam no próprio
+   * tema para viajar no export/import; redimensionadas no upload para caber no
+   * localStorage.
+   */
+  images: {
+    /** logotipo/ícone exibido na tela inicial (PNG, transparência preservada) */
+    startIcon: string;
+    /** papel de parede durante a partida (JPEG, cobre a tela) */
+    wallpaper: string;
+  };
   gameplay: {
     bpm: number;
     noteCount: number;
@@ -71,6 +82,10 @@ export interface Theme {
   lead: {
     enabled: boolean;
     headline: string;
+    /** true = não pode pular o cadastro ("agora não" some) */
+    required: boolean;
+    /** texto do checkbox de consentimento (LGPD); vazio = sem checkbox */
+    consentText: string;
   };
 }
 
@@ -96,6 +111,10 @@ export const DEFAULT_THEME: Theme = {
     playAgainCta: 'DE NOVO',
   },
   noteShape: 'circle',
+  images: {
+    startIcon: '',
+    wallpaper: '',
+  },
   gameplay: {
     bpm: 100,
     noteCount: 32,
@@ -115,6 +134,8 @@ export const DEFAULT_THEME: Theme = {
   lead: {
     enabled: false,
     headline: 'Cadastre-se para concorrer ao brinde',
+    required: false,
+    consentText: 'Autorizo o contato e o uso dos meus dados conforme a LGPD.',
   },
 };
 
@@ -184,6 +205,12 @@ function pickBool(raw: unknown, fallback: boolean): boolean {
   return typeof raw === 'boolean' ? raw : fallback;
 }
 
+/** Imagem: '' (ausente) ou uma URI segura (data:/blob:/http(s):). */
+function pickImage(raw: unknown): string {
+  if (typeof raw !== 'string' || raw === '') return '';
+  return /^(data:image\/|blob:|https?:)/.test(raw) ? raw : '';
+}
+
 /** Mescla JSON não-confiável sobre o DEFAULT_THEME, campo a campo. */
 export function resolveTheme(raw: unknown): Theme {
   const d = DEFAULT_THEME;
@@ -193,6 +220,7 @@ export function resolveTheme(raw: unknown): Theme {
   const gameplay = isRecord(raw['gameplay']) ? raw['gameplay'] : {};
   const audio = isRecord(raw['audio']) ? raw['audio'] : {};
   const lead = isRecord(raw['lead']) ? raw['lead'] : {};
+  const images = isRecord(raw['images']) ? raw['images'] : {};
   const shape = raw['noteShape'];
   const track = audio['track'];
   return {
@@ -217,6 +245,10 @@ export function resolveTheme(raw: unknown): Theme {
       playAgainCta: pickText(texts['playAgainCta'], d.texts.playAgainCta),
     },
     noteShape: NOTE_SHAPES.includes(shape as NoteShape) ? (shape as NoteShape) : d.noteShape,
+    images: {
+      startIcon: pickImage(images['startIcon']),
+      wallpaper: pickImage(images['wallpaper']),
+    },
     gameplay: {
       bpm: pickNumber(gameplay['bpm'], d.gameplay.bpm, 40, 220),
       noteCount: pickNumber(gameplay['noteCount'], d.gameplay.noteCount, 4, 500),
@@ -236,6 +268,8 @@ export function resolveTheme(raw: unknown): Theme {
     lead: {
       enabled: pickBool(lead['enabled'], d.lead.enabled),
       headline: pickText(lead['headline'], d.lead.headline),
+      required: pickBool(lead['required'], d.lead.required),
+      consentText: pickText(lead['consentText'], d.lead.consentText),
     },
   };
 }

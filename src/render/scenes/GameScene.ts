@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { generateDemoBeatmap, mulberry32, type Beatmap, type Note } from '../../core/beatmap.js';
 import { Conductor } from '../../core/conductor.js';
 import { DEFAULT_CONFIG, GameState, type HitResult } from '../../core/game-state.js';
+import type { Judgement } from '../../core/judgement.js';
 import { gradeFor, type Grade } from '../../core/grade.js';
 import { CSV_BOM, LeadStore, leadsToCsv, terminalId } from '../../data/lead-store.js';
 import { loadMusic } from '../../data/music-db.js';
@@ -9,6 +10,7 @@ import { decodeToMono, playMusic } from '../audio/music.js';
 import { playHitSound, scheduleTrack } from '../audio/tracks.js';
 import { mirrorLeadsCsvNative } from '../../platform/native-store.js';
 import { TriangleField } from '../fx/triangles.js';
+import { InactivityMonitor, inactivityTimeoutMs } from '../inactivity.js';
 import { colorToNum, type NoteShape, type Theme } from '../theme.js';
 
 export const WIDTH = 1080;
@@ -32,6 +34,9 @@ export class GameScene extends Phaser.Scene {
   private effectiveBpm = 100;
 
   private triangles!: TriangleField;
+  private wallpaper: Phaser.GameObjects.Image | null = null;
+  private wallpaperScrim: Phaser.GameObjects.Rectangle | null = null;
+  private startIconObj: Phaser.GameObjects.Image | null = null;
   private noteVisuals = new Map<number, { body: Phaser.GameObjects.Graphics; ring: Phaser.GameObjects.Graphics; note: Note }>();
   private scoreText!: Phaser.GameObjects.Text;
   private comboText!: Phaser.GameObjects.Text;
@@ -41,7 +46,15 @@ export class GameScene extends Phaser.Scene {
   private overlay: Phaser.GameObjects.GameObject[] = [];
   private lastCombo = 0;
   private lastCountdown = -1;
+  // cache do HUD: Phaser regenera a textura do texto a cada setText (canvas +
+  // upload p/ GPU). Sem cache = 3 uploads/frame = engasgo no totem. Só troca
+  // o texto quando o valor muda.
+  private lastScoreStr = '';
+  private lastAccStr = '';
+  private lastComboStr = '';
   private leadFormEl: HTMLElement | null = null;
+  private inactivity: InactivityMonitor | null = null;
+  private fpsText: Phaser.GameObjects.Text | null = null;
   /** deslocamento da grade de batida (music: chart.offsetMs/speed) p/ pulso visual */
   private phaseOffsetMs = 0;
   /** blob da música do operador, pré-carregado do IndexedDB no create */
@@ -93,6 +106,9 @@ export class GameScene extends Phaser.Scene {
     this.noteVisuals.clear();
     this.lastCombo = 0;
     this.lastCountdown = -1;
+    this.lastScoreStr = '';
+    this.lastAccStr = '';
+    this.lastComboStr = '';
     this.starting = false;
     this.paused = false;
     this.pauseUi = [];
@@ -100,6 +116,12 @@ export class GameScene extends Phaser.Scene {
 
     const c = this.theme.colors;
     this.cameras.main.setBackgroundColor(c.background);
+    this.wallpaper = null;
+    this.wallpaperScrim = null;
+    this.startIconObj = null;
+
+    // papel de parede do operador (atrás de tudo) + ícone da tela inicial
+    this.applyThemeImages();
 
     // fundo estilo osu!lazer: triângulos flutuando, pulsando na batida
     this.triangles = new TriangleField(this, {
@@ -111,17 +133,31 @@ export class GameScene extends Phaser.Scene {
       maxAlpha: 0.13,
     });
 
+    this.ensureParticleTexture();
+
     this.scoreText = this.text(WIDTH / 2, 110, '', 86, c.textPrimary, true).setDepth(10);
     this.comboText = this.text(WIDTH / 2, 205, '', 54, c.accent, true).setDepth(10);
     // precisão ao vivo no canto superior direito, como no osu!
     this.accText = this.text(WIDTH - 60, 90, '', 48, c.textPrimary, true).setOrigin(1, 0.5).setDepth(10);
     this.countdownText = this.text(WIDTH / 2, HEIGHT * 0.45, '', 260, c.accent, true).setDepth(25);
 
+    // reset por inatividade (totem sozinho volta à tela inicial); recriado a
+    // cada create() para não vazar listeners entre restarts.
+    this.inactivity?.destroy();
+    const idleMs = inactivityTimeoutMs();
+    this.inactivity = idleMs > 0 ? new InactivityMonitor(idleMs) : null;
+
+    if (new URLSearchParams(window.location.search).get('fps') === '1') {
+      this.fpsText = this.text(70, HEIGHT - 60, '', 34, c.approach).setOrigin(0, 0.5).setDepth(50);
+    }
+
     this.showAttract();
     this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => this.onTap(ptr));
     this.events.once('shutdown', () => {
       this.stopAudio();
       this.destroyLeadForm();
+      this.inactivity?.destroy();
+      this.inactivity = null;
     });
   }
 
@@ -130,23 +166,79 @@ export class GameScene extends Phaser.Scene {
   private showAttract(): void {
     const t = this.theme.texts;
     const c = this.theme.colors;
+    // quando há ícone, o título desce para abrir espaço no topo
+    const hasIcon = this.theme.images.startIcon !== '';
+    const titleY = hasIcon ? HEIGHT * 0.26 : HEIGHT * 0.14;
+    const subtitleY = hasIcon ? HEIGHT * 0.335 : HEIGHT * 0.24;
     this.logo = this.buildCircleButton(WIDTH / 2, HEIGHT * 0.47, LOGO_RADIUS, t.startCta, 92);
     this.overlay = [
-      this.text(WIDTH / 2, HEIGHT * 0.14, t.title, 150, c.accent, true),
-      this.text(WIDTH / 2, HEIGHT * 0.24, t.subtitle, 52, c.textPrimary),
+      this.text(WIDTH / 2, titleY, t.title, 150, c.accent, true),
+      this.text(WIDTH / 2, subtitleY, t.subtitle, 52, c.textPrimary),
       this.text(WIDTH / 2, HEIGHT * 0.72, 'toque em qualquer lugar para começar', 38, c.approach),
       this.logo,
       this.gearButton(),
     ];
+    // o ícone é reposicionado/criado quando a textura fica pronta
+    this.placeStartIcon();
+  }
+
+  // ---------------------------------------------------------------- imagens
+
+  /** Carrega (uma vez) as imagens data-URI do tema e as posiciona quando prontas. */
+  private applyThemeImages(): void {
+    const jobs: Array<[string, string, () => void]> = [];
+    if (this.theme.images.wallpaper) jobs.push(['sb_wallpaper', this.theme.images.wallpaper, () => this.placeWallpaper()]);
+    if (this.theme.images.startIcon) jobs.push(['sb_starticon', this.theme.images.startIcon, () => this.placeStartIcon()]);
+    let queued = 0;
+    for (const [key, uri, onReady] of jobs) {
+      if (this.textures.exists(key)) {
+        onReady();
+        continue;
+      }
+      this.load.image(key, uri);
+      this.load.once(`filecomplete-image-${key}`, onReady);
+      queued++;
+    }
+    if (queued > 0) this.load.start();
+  }
+
+  private placeWallpaper(): void {
+    if (!this.textures.exists('sb_wallpaper')) return;
+    this.wallpaper?.destroy();
+    this.wallpaperScrim?.destroy();
+    const img = this.add.image(WIDTH / 2, HEIGHT / 2, 'sb_wallpaper').setDepth(-5);
+    const src = this.textures.get('sb_wallpaper').getSourceImage() as { width: number; height: number };
+    // cobre a tela mantendo a proporção (como background-size: cover)
+    img.setScale(Math.max(WIDTH / src.width, HEIGHT / src.height));
+    this.wallpaper = img;
+    // véu sutil na cor do fundo p/ manter notas e texto legíveis sobre a foto
+    this.wallpaperScrim = this.add
+      .rectangle(0, 0, WIDTH, HEIGHT, colorToNum(this.theme.colors.background), 0.45)
+      .setOrigin(0)
+      .setDepth(-4);
+  }
+
+  private placeStartIcon(): void {
+    if (this.uiPhase !== 'attract' || this.theme.images.startIcon === '') return;
+    if (!this.textures.exists('sb_starticon')) return; // será chamado no load-complete
+    this.startIconObj?.destroy();
+    const img = this.add.image(WIDTH / 2, HEIGHT * 0.135, 'sb_starticon').setDepth(31);
+    const src = this.textures.get('sb_starticon').getSourceImage() as { width: number; height: number };
+    img.setScale(Math.min((WIDTH * 0.5) / src.width, (HEIGHT * 0.15) / src.height));
+    this.startIconObj = img;
+    this.overlay.push(img); // some junto com o resto da tela inicial ao começar
   }
 
   private async startSong(): Promise<void> {
     if (this.starting) return;
     this.starting = true;
     this.clearOverlay();
+    this.enterFullscreenIfRequested();
 
     // AudioContext só pode nascer depois de um gesto do usuário.
-    this.audio = new AudioContext();
+    // latencyHint:'interactive' minimiza a latência de saída (o atraso audível
+    // que o jogador sente) — parte do "delay" relatado no totem.
+    this.audio = new AudioContext({ latencyHint: 'interactive' });
 
     // música do operador: decodifica ANTES de armar o relógio (evita atraso)
     let musicBuffer: AudioBuffer | null = null;
@@ -255,15 +347,74 @@ export class GameScene extends Phaser.Scene {
     if (hit) {
       this.resolveNoteVisual(hit.note.id);
       this.judgementPopup(hit);
+      this.hitBurst(hit.note.x * WIDTH, hit.note.y * HEIGHT, hit.judgement);
       if (this.audio && this.theme.audio.hitSounds) {
         playHitSound(this.audio, hit.judgement, this.theme.audio.volume);
       }
     }
   }
 
+  // ---------------------------------------------------------------- polimento
+
+  /** Textura branca (círculo) reaproveitada por todas as partículas de acerto. */
+  private ensureParticleTexture(): void {
+    if (this.textures.exists('sb_particle')) return;
+    const g = this.make.graphics({ x: 0, y: 0 }, false);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(12, 12, 12);
+    g.generateTexture('sb_particle', 24, 24);
+    g.destroy();
+  }
+
+  /** Explosão de partículas no acerto, tingida pelo julgamento; nada em miss. */
+  private hitBurst(x: number, y: number, judgement: Judgement): void {
+    if (judgement === 'miss') return;
+    const colorHex = {
+      perfect: this.theme.colors.perfect,
+      great: this.theme.colors.great,
+      good: this.theme.colors.good,
+    }[judgement];
+    const count = judgement === 'perfect' ? 22 : judgement === 'great' ? 16 : 10;
+    const emitter = this.add.particles(x, y, 'sb_particle', {
+      speed: { min: 180, max: 560 },
+      angle: { min: 0, max: 360 },
+      scale: { start: judgement === 'perfect' ? 0.95 : 0.7, end: 0 },
+      alpha: { start: 1, end: 0 },
+      lifespan: 520,
+      blendMode: 'ADD',
+      tint: colorToNum(colorHex),
+      emitting: false,
+    });
+    emitter.setDepth(22);
+    emitter.explode(count);
+    // anel de impacto que expande e some (reforça o "perfeito")
+    if (judgement !== 'good') {
+      const ring = this.add.circle(x, y, NOTE_RADIUS * 0.7, 0x000000, 0).setStrokeStyle(8, colorToNum(colorHex)).setDepth(21);
+      this.tweens.add({ targets: ring, scale: 2.1, alpha: 0, duration: 380, ease: 'Cubic.Out', onComplete: () => ring.destroy() });
+    }
+    // emissor é one-shot: descarta após a vida das partículas
+    this.time.delayedCall(700, () => emitter.destroy());
+  }
+
+  /** Tremor sutil da câmera nos marcos de combo (25, 50, 75, …). */
+  private comboShake(combo: number): void {
+    if (combo > 0 && combo % 25 === 0) {
+      this.cameras.main.shake(180, 0.004);
+    }
+  }
+
   // ---------------------------------------------------------------- loop
 
   override update(_time: number, delta: number): void {
+    if (this.fpsText) this.fpsText.setText(`${Math.round(this.game.loop.actualFps)} fps`);
+
+    // inatividade avaliada mesmo pausado: totem abandonado (inclusive no menu de
+    // pausa ou na tela de resultado) volta sozinho à tela inicial.
+    if (this.inactivity?.isIdle() && this.uiPhase !== 'attract' && !this.leadFormEl) {
+      this.scene.restart();
+      return;
+    }
+
     if (this.paused) return;
     this.triangles.update(delta, this.beatPulse());
 
@@ -284,17 +435,44 @@ export class GameScene extends Phaser.Scene {
 
     this.syncNoteVisuals(t);
 
+    // HUD só é redesenhado quando o valor muda (evita upload de textura/frame)
     const r = this.state.results();
-    this.scoreText.setText(`${r.score}`);
-    this.accText.setText(`${(r.accuracy * 100).toFixed(1).replace('.', ',')}%`);
-    this.comboText.setText(r.combo > 1 ? `${r.combo}x` : '');
+    const scoreStr = `${r.score}`;
+    if (scoreStr !== this.lastScoreStr) {
+      this.scoreText.setText(scoreStr);
+      this.lastScoreStr = scoreStr;
+    }
+    const accStr = `${(r.accuracy * 100).toFixed(1).replace('.', ',')}%`;
+    if (accStr !== this.lastAccStr) {
+      this.accText.setText(accStr);
+      this.lastAccStr = accStr;
+    }
+    const comboStr = r.combo > 1 ? `${r.combo}x` : '';
+    if (comboStr !== this.lastComboStr) {
+      this.comboText.setText(comboStr);
+      this.lastComboStr = comboStr;
+    }
     if (r.combo > this.lastCombo && r.combo > 1) {
       this.comboText.setScale(1.35);
       this.tweens.add({ targets: this.comboText, scale: 1, duration: 160, ease: 'Cubic.Out' });
+      this.comboShake(r.combo);
     }
     this.lastCombo = r.combo;
 
     if (this.state.currentPhase === 'finished') this.showResults();
+  }
+
+  /** ?fullscreen=1 (ou app nativo): tela cheia no primeiro gesto do usuário. */
+  private enterFullscreenIfRequested(): void {
+    const wants = new URLSearchParams(window.location.search).get('fullscreen') === '1';
+    if (!wants) return;
+    if (!this.scale.isFullscreen) {
+      try {
+        this.scale.startFullscreen();
+      } catch {
+        /* alguns webviews negam sem gesto direto — best-effort */
+      }
+    }
   }
 
   // ---------------------------------------------------------------- pausa
@@ -452,26 +630,38 @@ export class GameScene extends Phaser.Scene {
     const r = this.state.results();
     const grade = gradeFor(r.accuracy, r.counts.miss);
 
+    const lead = this.theme.lead;
+    const hasConsent = lead.consentText.trim().length > 0;
     const inputCss = `font-size:30px;padding:22px 24px;border-radius:18px;border:1.5px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:${c.textPrimary};outline:none;width:100%;box-sizing:border-box;transition:border-color .15s;`;
+    const consentHtml = hasConsent
+      ? `<label style="display:flex;align-items:flex-start;gap:14px;color:${c.textPrimary};font-size:24px;text-align:left;cursor:pointer;line-height:1.35;">
+           <input type="checkbox" name="consent" style="width:30px;height:30px;flex:none;accent-color:${c.accent};margin-top:2px;">
+           <span style="opacity:.85;">${escapeHtml(lead.consentText)}</span>
+         </label>`
+      : '';
+    const skipHtml = lead.required
+      ? ''
+      : '<button type="button" data-skip style="font-size:24px;padding:8px;border:none;background:none;color:rgba(255,255,255,.4);cursor:pointer;">agora não</button>';
     const wrap = document.createElement('div');
     wrap.style.cssText =
       'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);z-index:10;font-family:Arial,sans-serif;';
     wrap.innerHTML = `
       <style>
         @keyframes sbLeadIn { from { transform: translateY(48px); opacity: 0; } to { transform: none; opacity: 1; } }
-        [data-lead-card] input:focus { border-color: ${c.accent} !important; }
+        [data-lead-card] input[type=text]:focus, [data-lead-card] input[inputmode]:focus { border-color: ${c.accent} !important; }
         [data-lead-card] input::placeholder { color: rgba(255,255,255,.35); }
         [data-lead-card] button[type=submit]:active { transform: scale(.97); }
       </style>
       <form data-lead-card style="background:linear-gradient(170deg, rgba(255,255,255,.08), rgba(255,255,255,.02)) ${c.background};border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 80px rgba(0,0,0,.6);border-radius:32px;padding:48px 44px;width:min(88vw,620px);display:flex;flex-direction:column;gap:18px;animation:sbLeadIn .35s cubic-bezier(.2,.9,.3,1.2);">
         <div style="width:64px;height:6px;border-radius:3px;background:${c.accent};margin:0 auto 6px;"></div>
-        <h2 style="color:${c.textPrimary};margin:0 0 6px;text-align:center;font-size:36px;line-height:1.25;">${escapeHtml(this.theme.lead.headline)}</h2>
+        <h2 style="color:${c.textPrimary};margin:0 0 6px;text-align:center;font-size:36px;line-height:1.25;">${escapeHtml(lead.headline)}</h2>
         <input name="name" placeholder="Nome *" autocomplete="off" style="${inputCss}">
         <input name="email" placeholder="E-mail *" autocomplete="off" inputmode="email" style="${inputCss}">
         <input name="phone" placeholder="Telefone (opcional)" autocomplete="off" inputmode="tel" style="${inputCss}">
+        ${consentHtml}
         <div data-err style="color:${c.miss};font-size:25px;min-height:30px;text-align:center;"></div>
         <button type="submit" style="font-size:32px;font-weight:bold;letter-spacing:.06em;padding:24px;border-radius:20px;border:none;background:${c.accent};color:#000;cursor:pointer;box-shadow:0 10px 30px ${c.accent}44;transition:transform .1s;">ENVIAR</button>
-        <button type="button" data-skip style="font-size:24px;padding:8px;border:none;background:none;color:rgba(255,255,255,.4);cursor:pointer;">agora não</button>
+        ${skipHtml}
       </form>`;
     document.body.appendChild(wrap);
     this.leadFormEl = wrap;
@@ -490,6 +680,10 @@ export class GameScene extends Phaser.Scene {
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         err.textContent = 'E-mail inválido.';
+        return;
+      }
+      if (hasConsent && data.get('consent') === null) {
+        err.textContent = 'É preciso aceitar o termo para continuar.';
         return;
       }
       const store = new LeadStore(window.localStorage);
@@ -515,7 +709,7 @@ export class GameScene extends Phaser.Scene {
         </div>`;
       window.setTimeout(() => this.closeLeadFormAndRestart(), 1500);
     });
-    (wrap.querySelector('[data-skip]') as HTMLElement).addEventListener('click', () => this.closeLeadFormAndRestart());
+    wrap.querySelector('[data-skip]')?.addEventListener('click', () => this.closeLeadFormAndRestart());
   }
 
   private closeLeadFormAndRestart(): void {
@@ -584,6 +778,7 @@ export class GameScene extends Phaser.Scene {
     for (const o of this.overlay) o.destroy();
     this.overlay = [];
     this.logo = null;
+    this.startIconObj = null; // foi destruído junto com o overlay
   }
 
   private stopAudio(): void {

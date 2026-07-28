@@ -25,6 +25,18 @@ export async function decodeToMono(ctx: BaseAudioContext, data: ArrayBuffer): Pr
   return { buffer, samples, sampleRate: buffer.sampleRate, durationMs: buffer.duration * 1000 };
 }
 
+/**
+ * Latência de saída do aparelho, em ms: o som que o jogador OUVE está este
+ * tanto atrás de `audio.currentTime`. Serve de chute inicial para a
+ * compensação de toque (o jogador reage ao que ouve, não ao relógio).
+ * Nem todo navegador expõe `outputLatency` (fallback: baseLatency).
+ */
+export function outputLatencyMs(ctx: AudioContext): number {
+  const out = typeof ctx.outputLatency === 'number' ? ctx.outputLatency : 0;
+  const base = typeof ctx.baseLatency === 'number' ? ctx.baseLatency : 0;
+  return Math.round((out + base) * 1000);
+}
+
 /** Inicia a música no instante zeroAtSec do relógio de áudio. Retorna o source (para stop). */
 export function playMusic(
   ctx: AudioContext,

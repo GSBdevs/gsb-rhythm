@@ -15,6 +15,21 @@ async function boot(): Promise<void> {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
+    // Performance no totem (mini-PC/box Android fraco):
+    // - high-performance escolhe a GPU dedicada quando existe;
+    // - roundPixels evita reamostragem de subpixel a cada frame;
+    // - powerPreference/failIfMajorPerformanceCaveat mantêm WebGL, não Canvas.
+    render: {
+      powerPreference: 'high-performance',
+      antialias: true,
+      roundPixels: true,
+      failIfMajorPerformanceCaveat: false,
+      desynchronized: true,
+    },
+    // teto de 60fps: sem isso o Phaser tenta seguir o rAF do monitor (144Hz+)
+    // e gasta CPU à toa; min:30 evita "espiral da morte" quando engasga.
+    fps: { target: 60, min: 30, forceSetTimeOut: false },
+    disableContextMenu: true,
     scene: [GameScene],
   });
   // tema via registry ANTES do init da cena (padrão validado no kiosk-maze;

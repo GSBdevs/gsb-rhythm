@@ -13,7 +13,7 @@ import { CSV_BOM, LeadStore, leadsToCsv } from '../data/lead-store.js';
 import { deleteMusic, loadMusic, saveMusic } from '../data/music-db.js';
 import { exportTextFile } from '../platform/file-export.js';
 import { saveAppliedThemeNative } from '../platform/native-store.js';
-import { decodeToMono } from '../render/audio/music.js';
+import { decodeToMono, outputLatencyMs } from '../render/audio/music.js';
 import {
   APPLIED_KEY,
   DEFAULT_THEME,
@@ -39,7 +39,41 @@ const musicState: { mode: AudioMode; name: string; chart: Chart | null } = {
   name: '',
   chart: null,
 };
+const imagesState: { startIcon: string; wallpaper: string } = { startIcon: '', wallpaper: '' };
 let noteShape: NoteShape = DEFAULT_THEME.noteShape;
+
+/**
+ * Redimensiona uma imagem no upload: sem isso, um PNG/JPEG cru estoura o
+ * localStorage (limite ~5 MB) e o tema fica grande demais para exportar.
+ * Retorna data-URI. Ícone → PNG (mantém transparência); parede → JPEG.
+ */
+function resizeImage(file: File, maxDim: number, mime: 'image/png' | 'image/jpeg', quality: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('canvas indisponível'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL(mime, quality));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('imagem inválida'));
+    };
+    img.src = url;
+  });
+}
 
 // ---------------------------------------------------------------- form ↔ tema
 
@@ -54,6 +88,8 @@ function populate(t: Theme): void {
   for (const [id, val] of Object.entries(t.colors)) input(`c-${id}`).value = val;
 
   noteShape = t.noteShape;
+  imagesState.startIcon = t.images.startIcon;
+  imagesState.wallpaper = t.images.wallpaper;
 
   input('g-speed').value = String(t.gameplay.speed);
   input('g-approach').value = String(t.gameplay.approachMs);
@@ -71,9 +107,12 @@ function populate(t: Theme): void {
 
   input('l-enabled').checked = t.lead.enabled;
   input('l-headline').value = t.lead.headline;
+  input('l-required').checked = t.lead.required;
+  input('l-consent').value = t.lead.consentText;
 
   refreshOutputs();
   refreshMusicUi();
+  refreshImagesUi();
 }
 
 function buildTheme(): Theme {
@@ -99,6 +138,7 @@ function buildTheme(): Theme {
       playAgainCta: input('t-playAgainCta').value,
     },
     noteShape,
+    images: { startIcon: imagesState.startIcon, wallpaper: imagesState.wallpaper },
     gameplay: {
       bpm: Number(input('g-bpm').value),
       noteCount: Number(input('g-notes').value),
@@ -118,6 +158,8 @@ function buildTheme(): Theme {
     lead: {
       enabled: input('l-enabled').checked,
       headline: input('l-headline').value,
+      required: input('l-required').checked,
+      consentText: input('l-consent').value,
     },
   });
 }
@@ -175,13 +217,47 @@ function refreshMusicUi(): void {
   }
 }
 
+// ---------------------------------------------------------------- imagens
+
+function refreshImageThumb(thumbId: string, dataUri: string): void {
+  const thumb = $(thumbId);
+  if (dataUri) {
+    thumb.style.backgroundImage = `url("${dataUri}")`;
+    thumb.textContent = '';
+    delete thumb.dataset['empty'];
+  } else {
+    thumb.style.backgroundImage = '';
+    thumb.textContent = 'sem imagem';
+    thumb.dataset['empty'] = '1';
+  }
+}
+
+function refreshImagesUi(): void {
+  refreshImageThumb('img-icon-thumb', imagesState.startIcon);
+  refreshImageThumb('img-wall-thumb', imagesState.wallpaper);
+  ($('img-icon-remove') as HTMLButtonElement).hidden = imagesState.startIcon === '';
+  ($('img-wall-remove') as HTMLButtonElement).hidden = imagesState.wallpaper === '';
+}
+
+async function handleImageFile(file: File, kind: 'startIcon' | 'wallpaper'): Promise<void> {
+  try {
+    imagesState[kind] =
+      kind === 'startIcon'
+        ? await resizeImage(file, 512, 'image/png', 1) // logo: preserva transparência
+        : await resizeImage(file, 1440, 'image/jpeg', 0.82); // parede: JPEG leve
+    refreshImagesUi();
+    pushDraft();
+  } catch {
+    window.alert('Não consegui ler essa imagem. Tente um PNG ou JPEG.');
+  }
+}
+
 async function handleMusicFile(file: File): Promise<void> {
   const status = $('music-status');
   status.textContent = '⏳ Decodificando e analisando a música…';
   try {
-    const ctx = new AudioContext();
+    const ctx = new OfflineAudioContext(1, 1, 44100);
     const decoded = await decodeToMono(ctx, await file.arrayBuffer());
-    void ctx.close();
     const analysis = analyzeAudio(decoded.samples, decoded.sampleRate);
     if (analysis.peaks.length < 8 || analysis.confidence < 0.15) {
       status.textContent = '❌ Não encontrei uma batida clara nesse áudio. Tente outra faixa (batida marcada funciona melhor).';
@@ -223,8 +299,9 @@ async function runCalibration(): Promise<void> {
     <button class="btn" id="cal-cancel">Cancelar</button>`;
   document.body.appendChild(overlay);
 
-  const ctx = new AudioContext();
+  const ctx = new AudioContext({ latencyHint: 'interactive' });
   await ctx.resume();
+  const autoLatency = outputLatencyMs(ctx); // chute do aparelho, caso falte toque
   const startAt = ctx.currentTime + 1.2;
   // agenda os ticks
   for (let b = 0; b < BEATS; b++) {
@@ -254,7 +331,16 @@ async function runCalibration(): Promise<void> {
     window.clearInterval(pulse);
     overlay.remove();
     void ctx.close();
-    if (cancelled || deltas.length < 4) return;
+    if (cancelled) return;
+    if (deltas.length < 4) {
+      // poucos toques: cai para a latência de saída medida do aparelho
+      if (autoLatency > 0) {
+        input('g-inputOffset').value = String(Math.max(-300, Math.min(300, autoLatency)));
+        pushDraft();
+        window.alert(`Toques insuficientes para calibrar. Usei a latência de saída detectada do aparelho: ${autoLatency} ms.`);
+      }
+      return;
+    }
     deltas.sort((a, b) => a - b);
     const median = deltas[Math.floor(deltas.length / 2)] ?? 0;
     const suggested = Math.round(median / 5) * 5;
@@ -382,6 +468,23 @@ function wire(): void {
     refreshMusicUi();
     pushDraft();
   });
+
+  // imagens
+  const wireImage = (kind: 'startIcon' | 'wallpaper', pickId: string, fileId: string, removeId: string) => {
+    $(pickId).addEventListener('click', () => $(fileId).click());
+    $<HTMLInputElement>(fileId).addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) void handleImageFile(file, kind);
+      (e.target as HTMLInputElement).value = '';
+    });
+    $(removeId).addEventListener('click', () => {
+      imagesState[kind] = '';
+      refreshImagesUi();
+      pushDraft();
+    });
+  };
+  wireImage('startIcon', 'img-icon-pick', 'img-icon-file', 'img-icon-remove');
+  wireImage('wallpaper', 'img-wall-pick', 'img-wall-file', 'img-wall-remove');
 
   $('act-calibrate').addEventListener('click', () => void runCalibration());
 
