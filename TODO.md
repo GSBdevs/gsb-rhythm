@@ -43,16 +43,30 @@ em música → arquivo muito longo/pesado, testar faixa menor.
 ## 5. Leaderboard — DISPENSADO pelo user (não fazer por enquanto).
 
 ## 6. Polimento de gameplay — o que ainda falta
-- Padrões rítmicos mais ricos por dificuldade (colcheias/rajadas no chart).
-- Sliders/hold notes (arrastar segurando) — segunda mecânica do osu! (muda o core).
-- Multi-toque real (duas notas simultâneas para duas mãos — muda o core/gerador).
-- (partículas no acerto + anel de impacto + screen shake em combo já foram feitos)
+- Hold notes que se MOVEM (arrastar seguindo um caminho) — hoje o hold é
+  "segure no lugar"; sliders com trajetória exigiriam caminho no chart.
+- Padrões ricos também no modo MÚSICA (hoje o chart da análise é só tap; os
+  padrões ricos valem no modo sintetizado).
+- (feito: hold notes segure-no-lugar, multi-toque, padrões ricos por
+  dificuldade, partículas, anel de impacto, screen shake)
 
 ## 7. Operação em evento — o que ainda falta
 - Modo atração: demo automática (auto-play fantasma) após N segundos na tela inicial.
   (o reset por inatividade em todas as telas já foi feito)
 
 ## Feito (não refazer)
+- **Mecânicas de gameplay (sessão 7)**: HOLD NOTES (segure no lugar) — `Note.kind`
+  'tap'|'hold' + `durationMs`; core: `tap` → hold-start, `releaseHold` (soltar
+  cedo = miss/quebra combo; segurar até a cauda = perfect), `tick` auto-conclui;
+  render: anel que encolhe + marca interna, `heldByPointer` mapeia dedo→hold,
+  `onRelease`. MULTI-TOQUE — `input.addPointer(2)`, acordes (2 notas no mesmo
+  instante) no gerador; cada dedo julga a nota mais próxima. PADRÕES RICOS —
+  `generateDemoBeatmap({richness})` (0..1, derivado da dificuldade/speed):
+  colcheias, acordes e holds; richness=0 = clássico (1/batida), sem rng extra.
+  16 testes de core (holds/acordes/richness). Só no modo sintetizado.
+- **Seeds no editor (sessão 7)**: botão "🎲 Gerar aleatória" (auto-salva) +
+  lista de chips de seeds salvas (localStorage `sbRhythmSavedSeeds`, máx 30,
+  clicar reusa, × remove, destaque na seed ativa).
 - **Polimento de gameplay (sessão 6)**: partículas no acerto (`hitBurst`, textura
   `sb_particle` gerada em runtime, cor por julgamento, blend ADD, 22/16/10
   partículas p/ perfect/great/good, miss não emite) + anel de impacto que expande

@@ -239,6 +239,58 @@ function refreshImagesUi(): void {
   ($('img-wall-remove') as HTMLButtonElement).hidden = imagesState.wallpaper === '';
 }
 
+// ---------------------------------------------------------------- seeds
+
+const SAVED_SEEDS_KEY = 'sbRhythmSavedSeeds';
+const MAX_SAVED_SEEDS = 30;
+
+function loadSavedSeeds(): number[] {
+  try {
+    const raw = window.localStorage.getItem(SAVED_SEEDS_KEY);
+    const arr: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((n): n is number => typeof n === 'number' && Number.isFinite(n)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedSeeds(seeds: number[]): void {
+  window.localStorage.setItem(SAVED_SEEDS_KEY, JSON.stringify(seeds.slice(0, MAX_SAVED_SEEDS)));
+}
+
+/** Guarda a seed (mais recente primeiro, sem duplicar). */
+function rememberSeed(seed: number): void {
+  writeSavedSeeds([seed, ...loadSavedSeeds().filter((s) => s !== seed)]);
+}
+
+function renderSeedChips(): void {
+  const box = $('seed-chips');
+  const current = Number(input('g-seed').value);
+  box.replaceChildren();
+  for (const seed of loadSavedSeeds()) {
+    const chip = document.createElement('span');
+    chip.className = 'seed-chip' + (seed === current ? ' active' : '');
+    const label = document.createElement('span');
+    label.textContent = String(seed);
+    label.addEventListener('click', () => {
+      input('g-seed').value = String(seed);
+      renderSeedChips();
+      pushDraft();
+    });
+    const rm = document.createElement('span');
+    rm.className = 'rm';
+    rm.textContent = '×';
+    rm.title = 'remover';
+    rm.addEventListener('click', (e) => {
+      e.stopPropagation();
+      writeSavedSeeds(loadSavedSeeds().filter((s) => s !== seed));
+      renderSeedChips();
+    });
+    chip.append(label, rm);
+    box.appendChild(chip);
+  }
+}
+
 async function handleImageFile(file: File, kind: 'startIcon' | 'wallpaper'): Promise<void> {
   try {
     imagesState[kind] =
@@ -394,6 +446,16 @@ function wire(): void {
     pushDraft();
   });
 
+  // seeds: gerar aleatória (auto-salva) + destacar a seed ativa ao digitar
+  $('seed-random').addEventListener('click', () => {
+    const seed = Math.floor(Math.random() * 2 ** 31);
+    input('g-seed').value = String(seed);
+    rememberSeed(seed);
+    renderSeedChips();
+    pushDraft();
+  });
+  input('g-seed').addEventListener('input', () => renderSeedChips());
+
   for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-preset]')) {
     btn.addEventListener('click', () => {
       const p = PRESETS[btn.dataset['preset'] ?? ''];
@@ -521,6 +583,7 @@ async function init(): Promise<void> {
   populate(current ?? structuredClone(DEFAULT_THEME));
   pushDraft();
   refreshLeadCount();
+  renderSeedChips();
   wire();
 }
 

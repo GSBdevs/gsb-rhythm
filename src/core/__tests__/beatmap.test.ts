@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateDemoBeatmap, mulberry32 } from '../beatmap.js';
+import { generateDemoBeatmap, holdTailMs, mulberry32, noteKind } from '../beatmap.js';
 
 describe('generateDemoBeatmap', () => {
   it('gera uma nota por batida no BPM pedido', () => {
@@ -35,5 +35,29 @@ describe('generateDemoBeatmap', () => {
       const cur = b.notes[i]!;
       expect(Math.hypot(cur.x - prev.x, cur.y - prev.y)).toBeGreaterThanOrEqual(0.12);
     }
+  });
+
+  it('richness 0 = tudo tap, uma por batida (comportamento clássico preservado)', () => {
+    const b = generateDemoBeatmap({ bpm: 120, noteCount: 12, rng: mulberry32(5), richness: 0 });
+    expect(b.notes.every((n) => noteKind(n) === 'tap')).toBe(true);
+    for (let i = 0; i < b.notes.length; i++) expect(b.notes[i]?.timeMs).toBe(i * 500);
+  });
+
+  it('richness alto produz holds e acordes (multi-toque)', () => {
+    const b = generateDemoBeatmap({ bpm: 120, noteCount: 60, rng: mulberry32(11), richness: 1 });
+    expect(b.notes).toHaveLength(60);
+    const holds = b.notes.filter((n) => noteKind(n) === 'hold');
+    expect(holds.length).toBeGreaterThan(0);
+    for (const h of holds) expect(holdTailMs(h)).toBeGreaterThan(h.timeMs); // hold tem duração
+    // acordes = pelo menos duas notas no mesmo instante
+    const byTime = new Map<number, number>();
+    for (const n of b.notes) byTime.set(n.timeMs, (byTime.get(n.timeMs) ?? 0) + 1);
+    expect([...byTime.values()].some((c) => c >= 2)).toBe(true);
+  });
+
+  it('continua determinístico com richness', () => {
+    const a = generateDemoBeatmap({ bpm: 128, noteCount: 40, rng: mulberry32(9), richness: 0.7 });
+    const b = generateDemoBeatmap({ bpm: 128, noteCount: 40, rng: mulberry32(9), richness: 0.7 });
+    expect(a).toEqual(b);
   });
 });
