@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { generateDemoBeatmap, holdTailMs, mulberry32, noteKind, type Beatmap, type Note } from '../../core/beatmap.js';
+import { generateDemoBeatmap, mulberry32, type Beatmap, type Note } from '../../core/beatmap.js';
 import { Conductor } from '../../core/conductor.js';
 import { DEFAULT_CONFIG, GameState, type HitResult } from '../../core/game-state.js';
 import type { Judgement } from '../../core/judgement.js';
@@ -23,6 +23,12 @@ const LOGO_RADIUS = 280;
 
 type UiPhase = 'attract' | 'playing' | 'results';
 
+interface NoteVisual {
+  body: Phaser.GameObjects.Graphics;
+  ring: Phaser.GameObjects.Graphics;
+  note: Note;
+}
+
 const FONT = 'Arial, sans-serif';
 
 export class GameScene extends Phaser.Scene {
@@ -37,11 +43,7 @@ export class GameScene extends Phaser.Scene {
   private wallpaper: Phaser.GameObjects.Image | null = null;
   private wallpaperScrim: Phaser.GameObjects.Rectangle | null = null;
   private startIconObj: Phaser.GameObjects.Image | null = null;
-  private noteVisuals = new Map<number, { body: Phaser.GameObjects.Graphics; ring: Phaser.GameObjects.Graphics; note: Note }>();
-  /** holds sendo segurados: cabeça + anel que encolhe com o tempo restante */
-  private holdVisuals = new Map<number, { body: Phaser.GameObjects.Graphics; ring: Phaser.GameObjects.Graphics; note: Note }>();
-  /** pointerId → id da nota de hold que aquele dedo segura */
-  private heldByPointer = new Map<number, number>();
+  private noteVisuals = new Map<number, NoteVisual>();
   private scoreText!: Phaser.GameObjects.Text;
   private comboText!: Phaser.GameObjects.Text;
   private accText!: Phaser.GameObjects.Text;
@@ -95,7 +97,7 @@ export class GameScene extends Phaser.Scene {
       this.musicPromise = loadMusic().then((m) => (m ? m.blob.arrayBuffer() : null)).catch(() => null);
     } else {
       this.effectiveBpm = Phaser.Math.Clamp(g.bpm * g.speed, 30, 300);
-      // riqueza rítmica (holds/acordes/colcheias) cresce com a dificuldade:
+      // riqueza rítmica (colcheias + acordes/multi-toque) cresce com a dificuldade:
       // speed 0.8 (fácil) → 0 ; 1.0 → ~0.17 ; 1.25 → ~0.375 ; 1.5 (expert) → ~0.58
       const richness = Phaser.Math.Clamp((g.speed - 0.8) / 1.2, 0, 1);
       beatmap = generateDemoBeatmap({
@@ -112,8 +114,6 @@ export class GameScene extends Phaser.Scene {
     this.conductor = new Conductor(beatmap.leadInMs);
     this.uiPhase = 'attract';
     this.noteVisuals.clear();
-    this.holdVisuals.clear();
-    this.heldByPointer.clear();
     this.lastCombo = 0;
     this.lastCountdown = -1;
     this.lastScoreStr = '';
@@ -161,12 +161,11 @@ export class GameScene extends Phaser.Scene {
       this.fpsText = this.text(70, HEIGHT - 60, '', 34, c.approach).setOrigin(0, 0.5).setDepth(50);
     }
 
-    // multi-toque: acompanha até 3 dedos (acordes + holds simultâneos)
+    // multi-toque: acompanha até 3 dedos (acordes = duas notas simultâneas)
     this.input.addPointer(2);
 
     this.showAttract();
     this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => this.onTap(ptr));
-    this.input.on('pointerup', (ptr: Phaser.Input.Pointer) => this.onRelease(ptr));
     this.events.once('shutdown', () => {
       this.stopAudio();
       this.destroyLeadForm();
@@ -360,33 +359,11 @@ export class GameScene extends Phaser.Scene {
     const hit = this.state.tap(ptr.x / WIDTH, ptr.y / HEIGHT, this.songNowMs() - this.theme.gameplay.inputOffsetMs);
     if (!hit) return;
 
-    if (hit.event === 'hold-start') {
-      // a cabeça pontuou; o hold segue vivo até soltar/expirar
-      this.promoteToHoldVisual(hit.note.id);
-      this.heldByPointer.set(ptr.id, hit.note.id);
-    } else {
-      this.resolveNoteVisual(hit.note.id);
-    }
+    this.resolveNoteVisual(hit.note.id);
     this.judgementPopup(hit);
     this.hitBurst(hit.note.x * WIDTH, hit.note.y * HEIGHT, hit.judgement);
     if (this.audio && this.theme.audio.hitSounds) {
       playHitSound(this.audio, hit.judgement, this.theme.audio.volume);
-    }
-  }
-
-  /** Dedo levantado: se segurava um hold, resolve a cauda no core + no visual. */
-  private onRelease(ptr: Phaser.Input.Pointer): void {
-    if (this.uiPhase !== 'playing') return;
-    const noteId = this.heldByPointer.get(ptr.id);
-    if (noteId === undefined) return;
-    this.heldByPointer.delete(ptr.id);
-    const rel = this.state.releaseHold(noteId, this.songNowMs() - this.theme.gameplay.inputOffsetMs);
-    if (!rel) return; // já auto-concluído pelo tick
-    this.resolveHoldVisual(noteId, rel.judgement !== 'miss');
-    this.judgementPopup(rel);
-    if (rel.judgement !== 'miss') {
-      this.hitBurst(rel.note.x * WIDTH, rel.note.y * HEIGHT, rel.judgement);
-      if (this.audio && this.theme.audio.hitSounds) playHitSound(this.audio, rel.judgement, this.theme.audio.volume);
     }
   }
 
@@ -464,19 +441,12 @@ export class GameScene extends Phaser.Scene {
 
     this.updateCountdown(t);
 
-    for (const ev of this.state.tick(t)) {
-      if (ev.event === 'hold-end') {
-        // hold segurado até o fim: resolve o visual e libera o dedo mapeado
-        this.resolveHoldVisual(ev.note.id, true);
-        for (const [pid, nid] of this.heldByPointer) if (nid === ev.note.id) this.heldByPointer.delete(pid);
-      } else {
-        this.resolveNoteVisual(ev.note.id);
-      }
-      this.judgementPopup(ev);
+    for (const missed of this.state.tick(t)) {
+      this.resolveNoteVisual(missed.note.id);
+      this.judgementPopup(missed);
     }
 
     this.syncNoteVisuals(t);
-    this.updateHoldVisuals(t);
 
     // HUD só é redesenhado quando o valor muda (evita upload de textura/frame)
     const r = this.state.results();
@@ -614,7 +584,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private createNoteVisual(note: Note): { body: Phaser.GameObjects.Graphics; ring: Phaser.GameObjects.Graphics; note: Note } {
+  private createNoteVisual(note: Note): NoteVisual {
     const x = note.x * WIDTH;
     const y = note.y * HEIGHT;
     const c = this.theme.colors;
@@ -623,11 +593,6 @@ export class GameScene extends Phaser.Scene {
     body.fillStyle(colorToNum(c.note), 1);
     body.lineStyle(8, colorToNum(c.noteBorder), 1);
     drawShape(body, this.theme.noteShape, NOTE_RADIUS);
-    // marca de hold: anel interno na cor de destaque ("segure")
-    if (noteKind(note) === 'hold') {
-      body.lineStyle(7, colorToNum(c.accent), 0.95);
-      body.strokeCircle(0, 0, NOTE_RADIUS * 0.5);
-    }
 
     const ring = this.add.graphics({ x, y }).setDepth(1);
     ring.lineStyle(6, colorToNum(c.approach), 1);
@@ -635,47 +600,6 @@ export class GameScene extends Phaser.Scene {
 
     this.tweens.add({ targets: body, scale: { from: 0.6, to: 1 }, duration: 150, ease: 'Back.Out' });
     return { body, ring, note };
-  }
-
-  // ---------------------------------------------------------------- holds (visual)
-
-  /** Move a cabeça tocada de noteVisuals para holdVisuals com anel de duração. */
-  private promoteToHoldVisual(noteId: number): void {
-    const vis = this.noteVisuals.get(noteId);
-    if (!vis) return;
-    this.noteVisuals.delete(noteId);
-    vis.ring.destroy(); // não precisa mais do anel de aproximação
-    const x = vis.note.x * WIDTH;
-    const y = vis.note.y * HEIGHT;
-    // anel que encolhe mostrando quanto falta segurar
-    const ring = this.add.graphics({ x, y }).setDepth(3);
-    ring.lineStyle(12, colorToNum(this.theme.colors.accent), 1);
-    ring.strokeCircle(0, 0, NOTE_RADIUS + 22);
-    this.holdVisuals.set(noteId, { body: vis.body, ring, note: vis.note });
-  }
-
-  /** Atualiza o anel de cada hold ativo (encolhe até a cauda) e pulsa a cabeça. */
-  private updateHoldVisuals(songTimeMs: number): void {
-    for (const vis of this.holdVisuals.values()) {
-      const dur = vis.note.durationMs ?? 1;
-      const remaining = Phaser.Math.Clamp((holdTailMs(vis.note) - songTimeMs) / dur, 0, 1);
-      vis.ring.setScale(0.35 + 0.65 * remaining);
-      vis.body.setScale(1 + 0.08 * this.beatPulse());
-    }
-  }
-
-  private resolveHoldVisual(noteId: number, success: boolean): void {
-    const vis = this.holdVisuals.get(noteId);
-    if (!vis) return;
-    this.holdVisuals.delete(noteId);
-    vis.ring.destroy();
-    this.tweens.add({
-      targets: vis.body,
-      scale: success ? 1.5 : 0.7,
-      alpha: 0,
-      duration: 200,
-      onComplete: () => vis.body.destroy(),
-    });
   }
 
   private resolveNoteVisual(noteId: number): void {

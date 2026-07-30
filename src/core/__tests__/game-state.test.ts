@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { Beatmap, Note } from '../beatmap.js';
+import type { Beatmap } from '../beatmap.js';
 import { DEFAULT_CONFIG, GameState } from '../game-state.js';
 
-function makeBeatmap(notes: Array<Partial<Note> & { id: number; timeMs: number; x: number; y: number }>): Beatmap {
+function makeBeatmap(notes: Array<{ id: number; timeMs: number; x: number; y: number }>): Beatmap {
   return { title: 't', bpm: 120, leadInMs: 2000, notes };
 }
 
@@ -94,67 +94,14 @@ describe('GameState', () => {
     expect(s.results().counts.perfect).toBe(2);
     expect(s.currentPhase).toBe('finished');
   });
-});
 
-describe('GameState — holds', () => {
-  const holdMap = () =>
-    makeBeatmap([{ id: 0, timeMs: 1000, x: 0.5, y: 0.5, kind: 'hold', durationMs: 800 }]);
-
-  it('cabeça do hold vira hold ativo, não finaliza a partida', () => {
-    const s = playing(holdMap());
-    const hit = s.tap(0.5, 0.5, 1000);
-    expect(hit?.event).toBe('hold-start');
-    expect(hit?.judgement).toBe('perfect');
-    expect(s.isHoldActive(0)).toBe(true);
-    expect(s.activeHoldNotes()).toHaveLength(1);
-    expect(s.currentPhase).toBe('playing');
-    expect(s.results().counts.perfect).toBe(1); // só a cabeça por enquanto
-  });
-
-  it('segurar até a cauda = sucesso (cabeça + cauda perfeitas)', () => {
-    const s = playing(holdMap());
-    s.tap(0.5, 0.5, 1000);
-    const rel = s.releaseHold(0, 1800); // cauda em 1000+800
-    expect(rel?.event).toBe('hold-end');
-    expect(rel?.judgement).toBe('perfect');
-    expect(s.results().counts.perfect).toBe(2);
-    expect(s.currentPhase).toBe('finished');
-  });
-
-  it('soltar cedo demais quebra a cauda (miss) e o combo', () => {
-    const s = playing(holdMap());
-    s.tap(0.5, 0.5, 1000);
-    const rel = s.releaseHold(0, 1200); // muito antes de 1800
-    expect(rel?.judgement).toBe('miss');
-    expect(s.results().combo).toBe(0);
-    expect(s.results().counts.miss).toBe(1);
-  });
-
-  it('segurar além da cauda auto-conclui no tick (sucesso)', () => {
-    const s = playing(holdMap());
-    s.tap(0.5, 0.5, 1000);
-    const events = s.tick(1800 + DEFAULT_CONFIG.windows.goodMs + 1);
-    expect(events.map((e) => e.event)).toEqual(['hold-end']);
-    expect(events[0]?.judgement).toBe('perfect');
-    expect(s.isHoldActive(0)).toBe(false);
-    expect(s.currentPhase).toBe('finished');
-  });
-
-  it('cabeça de hold não tocada expira como miss', () => {
-    const s = playing(holdMap());
-    const missed = s.tick(1000 + DEFAULT_CONFIG.windows.goodMs + 1);
-    expect(missed[0]?.event).toBe('miss');
-    expect(s.results().counts.miss).toBe(1);
-    expect(s.currentPhase).toBe('finished');
-  });
-
-  it('releaseHold em id inexistente retorna null', () => {
-    const s = playing(holdMap());
-    expect(s.releaseHold(0, 1800)).toBeNull();
-  });
-
-  it('endTimeMs considera a cauda do hold', () => {
-    const s = playing(holdMap());
-    expect(s.endTimeMs).toBe(1800 + DEFAULT_CONFIG.windows.goodMs);
+  it('endTimeMs = última nota + janela good', () => {
+    const s = playing(
+      makeBeatmap([
+        { id: 0, timeMs: 1000, x: 0.5, y: 0.5 },
+        { id: 1, timeMs: 3000, x: 0.3, y: 0.6 },
+      ]),
+    );
+    expect(s.endTimeMs).toBe(3000 + DEFAULT_CONFIG.windows.goodMs);
   });
 });

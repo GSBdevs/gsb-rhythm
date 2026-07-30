@@ -5,8 +5,8 @@
  * → localStorage/IndexedDB persistem entre aberturas (gotcha resolvido na
  * roleta/matching: porta efêmera muda o origin e zera os dados).
  *
- * Sem lockdown de kiosk por enquanto (janela fullscreen normal, ESC/F11 livres)
- * — travar é decisão por evento; ver TODO.md.
+ * Janela normal (sem tela cheia) e sem lockdown de kiosk por enquanto — travar
+ * é decisão por evento; ver TODO.md.
  */
 
 const { app, BrowserWindow, dialog } = require('electron');
@@ -60,7 +60,6 @@ function startServer() {
 
 function createWindow() {
   const win = new BrowserWindow({
-    fullscreen: process.env.KIOSK_WINDOWED !== '1',
     width: 540,
     height: 960,
     autoHideMenuBar: true,

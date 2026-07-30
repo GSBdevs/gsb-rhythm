@@ -43,19 +43,28 @@ em música → arquivo muito longo/pesado, testar faixa menor.
 ## 5. Leaderboard — DISPENSADO pelo user (não fazer por enquanto).
 
 ## 6. Polimento de gameplay — o que ainda falta
-- Hold notes que se MOVEM (arrastar seguindo um caminho) — hoje o hold é
-  "segure no lugar"; sliders com trajetória exigiriam caminho no chart.
 - Padrões ricos também no modo MÚSICA (hoje o chart da análise é só tap; os
-  padrões ricos valem no modo sintetizado).
-- (feito: hold notes segure-no-lugar, multi-toque, padrões ricos por
-  dificuldade, partículas, anel de impacto, screen shake)
+  padrões ricos — colcheias/acordes — valem no modo sintetizado).
+- (feito e MANTIDO: multi-toque/acordes, colcheias por dificuldade, partículas,
+  anel de impacto, screen shake.)
+- REMOVIDO A PEDIDO DO USER (atrapalhavam iniciantes): hold notes E slides
+  (retas, curvas bézier e curvas "S"). O jogo voltou a ser só tap notes. Não
+  refazer sem pedido explícito.
 
 ## 7. Operação em evento — o que ainda falta
 - Modo atração: demo automática (auto-play fantasma) após N segundos na tela inicial.
   (o reset por inatividade em todas as telas já foi feito)
 
 ## Feito (não refazer)
-- **Mecânicas de gameplay (sessão 7)**: HOLD NOTES (segure no lugar) — `Note.kind`
+- **[REMOVIDO na sessão 11 a pedido do user] Slide notes (sessão 8)**: hold que se MOVE — `Note.endX/endY` (destino);
+  helpers `isSlide`/`noteEnd`. Gerador: fração dos holds (slideChance 0.6·richness)
+  vira slide com destino sorteado pela SEED (`pickReachable`, dist 0.18–0.42,
+  dentro da área), duração em batidas (movimento beat-sincronizado). Core reusa
+  a lógica de hold (julga por TEMPO), zero mudança de julgamento. Render: trilha
+  (faixa início→destino + marca do destino) + bolinha/anel que viajam ao longo
+  da duração; feedback do fim sai no destino (`feedbackPos`). +2 testes. Só modo
+  sintetizado. Electron: removido o modo tela cheia (janela normal 540×960).
+- **Mecânicas de gameplay (sessão 7; HOLD NOTES REMOVIDAS na sessão 11 — só ficaram multi-toque e padrões ricos)**: HOLD NOTES (segure no lugar) — `Note.kind`
   'tap'|'hold' + `durationMs`; core: `tap` → hold-start, `releaseHold` (soltar
   cedo = miss/quebra combo; segurar até a cauda = perfect), `tick` auto-conclui;
   render: anel que encolhe + marca interna, `heldByPointer` mapeia dedo→hold,

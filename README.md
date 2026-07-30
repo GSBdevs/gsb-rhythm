@@ -34,7 +34,8 @@ de código (alvo `dir`+`zip` dispensa o winCodeSign).
 `/editor.html` (ou botão ⚙ dentro do jogo):
 - identidade/textos, cores, forma das notas;
 - **dificuldade e velocidade** (presets Fácil→Expert + slider 0.5x–2x): a
-  dificuldade também enriquece o ritmo (colcheias, acordes/multi-toque e holds);
+  dificuldade também enriquece o ritmo (colcheias, acordes/multi-toque, holds e
+  slides — holds que se movem, no ritmo e sorteadas pela seed);
 - **seeds**: gerar seed aleatória e salvar/reusar seeds na própria tela;
 - **imagens**: ícone/logo na tela inicial + papel de parede durante o jogo;
 - **música própria**: escolha um MP3/OGG/WAV — BPM, offset e notas são detectados
