@@ -56,6 +56,15 @@ em música → arquivo muito longo/pesado, testar faixa menor.
   (o reset por inatividade em todas as telas já foi feito)
 
 ## Feito (não refazer)
+- **Tela de resultado só sai pelo botão central (sessão 12)**: tocar em qualquer
+  lugar não sai; só o botão "DE NOVO" (Container interativo, hit-circle) chama
+  `exitResults` (lead form se ligado, senão restart). onTap na fase results = no-op.
+- **Imagens por nota (sessão 12)**: `theme.images.noteImages: string[]` (data-URIs,
+  máx 40). Aparecem DENTRO das notas em ordem de surgimento (`note.id % N`) e
+  repetem em ciclo. Render: `add.image` recortado por máscara de geometria na
+  forma da nota (`drawShape` em Graphics invisível), a borda emoldura; carregadas
+  em applyThemeImages (chaves `sb_note_i`). Editor: card com grade numerada
+  (adicionar múltiplas, remover, limpar; resize 256 PNG). pickImageList no tema.
 - **[REMOVIDO na sessão 11 a pedido do user] Slide notes (sessão 8)**: hold que se MOVE — `Note.endX/endY` (destino);
   helpers `isSlide`/`noteEnd`. Gerador: fração dos holds (slideChance 0.6·richness)
   vira slide com destino sorteado pela SEED (`pickReachable`, dist 0.18–0.42,

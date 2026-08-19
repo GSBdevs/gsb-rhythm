@@ -174,6 +174,25 @@
       .img-thumb:not([data-empty]) { border-style: solid; border-color: var(--border); }
       .img-thumb:not([data-empty]) span { display: none; }
 
+      /* imagens das notas: grade de miniaturas numeradas */
+      .note-imgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
+      .note-imgs:empty::after { content: 'nenhuma imagem'; color: #555; font-size: 12.5px; }
+      .note-img {
+        position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden;
+        border: 1px solid var(--border); background: #101014 center/cover no-repeat;
+      }
+      .note-img .idx {
+        position: absolute; top: 4px; left: 4px; min-width: 20px; height: 20px; padding: 0 5px;
+        display: grid; place-items: center; border-radius: 10px; font-size: 12px; font-weight: 700;
+        background: rgba(0,0,0,.6); color: #fff;
+      }
+      .note-img .rm {
+        position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
+        display: grid; place-items: center; border: none; background: rgba(0,0,0,.6); color: #fff;
+        font-size: 14px; line-height: 1; cursor: pointer;
+      }
+      .note-img .rm:hover { background: var(--danger); }
+
       /* ---------- seeds ---------- */
       .seed-row { display: flex; gap: 10px; align-items: stretch; }
       .seed-row input { flex: 1; }
@@ -328,6 +347,15 @@
               </div>
             </div>
             <input type="file" id="img-wall-file" accept="image/*" hidden />
+          </div>
+          <div class="img-slot">
+            <div class="field"><span>Imagens das notas (1:1) — aparecem em ordem dentro das notas e repetem em ciclo</span></div>
+            <div class="note-imgs" id="note-imgs-grid"></div>
+            <div class="img-actions" style="flex-direction:row;flex-wrap:wrap">
+              <button class="btn" id="note-imgs-add">Adicionar imagens</button>
+              <button class="btn danger ghost" id="note-imgs-clear" hidden>Limpar todas</button>
+            </div>
+            <input type="file" id="note-imgs-file" accept="image/*" multiple hidden />
           </div>
           <p class="hint">As imagens são redimensionadas ao importar e ficam salvas no tema (viajam no exportar/importar). Deixe vazio para usar só as cores.</p>
         </div>

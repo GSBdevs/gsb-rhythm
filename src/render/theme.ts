@@ -54,6 +54,11 @@ export interface Theme {
     startIcon: string;
     /** papel de parede durante a partida (JPEG, cobre a tela) */
     wallpaper: string;
+    /**
+     * imagens 1:1 mostradas DENTRO das notas, em ordem de surgimento; quando
+     * acabam, repetem em ciclo. Vazio = notas com a cor do tema.
+     */
+    noteImages: string[];
   };
   gameplay: {
     bpm: number;
@@ -114,6 +119,7 @@ export const DEFAULT_THEME: Theme = {
   images: {
     startIcon: '',
     wallpaper: '',
+    noteImages: [],
   },
   gameplay: {
     bpm: 100,
@@ -211,6 +217,15 @@ function pickImage(raw: unknown): string {
   return /^(data:image\/|blob:|https?:)/.test(raw) ? raw : '';
 }
 
+/** Lista de imagens: só URIs válidas, no máx. 40 (evita tema gigante). */
+function pickImageList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((v) => pickImage(v))
+    .filter((v) => v !== '')
+    .slice(0, 40);
+}
+
 /** Mescla JSON não-confiável sobre o DEFAULT_THEME, campo a campo. */
 export function resolveTheme(raw: unknown): Theme {
   const d = DEFAULT_THEME;
@@ -248,6 +263,7 @@ export function resolveTheme(raw: unknown): Theme {
     images: {
       startIcon: pickImage(images['startIcon']),
       wallpaper: pickImage(images['wallpaper']),
+      noteImages: pickImageList(images['noteImages']),
     },
     gameplay: {
       bpm: pickNumber(gameplay['bpm'], d.gameplay.bpm, 40, 220),

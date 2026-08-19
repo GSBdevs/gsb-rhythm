@@ -42,12 +42,22 @@ describe('resolveTheme', () => {
     expect(resolveTheme({ images: { startIcon: dataUri, wallpaper: 'blob:xyz' } }).images).toEqual({
       startIcon: dataUri,
       wallpaper: 'blob:xyz',
+      noteImages: [],
     });
     // URIs perigosas ou inválidas viram '' (sem imagem)
     expect(resolveTheme({ images: { startIcon: 'javascript:alert(1)', wallpaper: 'data:text/html,x' } }).images).toEqual({
       startIcon: '',
       wallpaper: '',
+      noteImages: [],
     });
-    expect(resolveTheme({}).images).toEqual({ startIcon: '', wallpaper: '' });
+    expect(resolveTheme({}).images).toEqual({ startIcon: '', wallpaper: '', noteImages: [] });
+  });
+
+  it('noteImages filtra URIs inválidas e limita a 40', () => {
+    const uri = 'data:image/png;base64,iVBORw0KGgo=';
+    const t = resolveTheme({ images: { noteImages: [uri, 'javascript:x', uri, 42, ''] } });
+    expect(t.images.noteImages).toEqual([uri, uri]);
+    const many = resolveTheme({ images: { noteImages: Array.from({ length: 50 }, () => uri) } });
+    expect(many.images.noteImages).toHaveLength(40);
   });
 });

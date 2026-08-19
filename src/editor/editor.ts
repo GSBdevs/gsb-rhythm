@@ -39,7 +39,12 @@ const musicState: { mode: AudioMode; name: string; chart: Chart | null } = {
   name: '',
   chart: null,
 };
-const imagesState: { startIcon: string; wallpaper: string } = { startIcon: '', wallpaper: '' };
+const imagesState: { startIcon: string; wallpaper: string; noteImages: string[] } = {
+  startIcon: '',
+  wallpaper: '',
+  noteImages: [],
+};
+const MAX_NOTE_IMAGES = 40;
 let noteShape: NoteShape = DEFAULT_THEME.noteShape;
 
 /**
@@ -90,6 +95,7 @@ function populate(t: Theme): void {
   noteShape = t.noteShape;
   imagesState.startIcon = t.images.startIcon;
   imagesState.wallpaper = t.images.wallpaper;
+  imagesState.noteImages = [...t.images.noteImages];
 
   input('g-speed').value = String(t.gameplay.speed);
   input('g-approach').value = String(t.gameplay.approachMs);
@@ -138,7 +144,11 @@ function buildTheme(): Theme {
       playAgainCta: input('t-playAgainCta').value,
     },
     noteShape,
-    images: { startIcon: imagesState.startIcon, wallpaper: imagesState.wallpaper },
+    images: {
+      startIcon: imagesState.startIcon,
+      wallpaper: imagesState.wallpaper,
+      noteImages: imagesState.noteImages,
+    },
     gameplay: {
       bpm: Number(input('g-bpm').value),
       noteCount: Number(input('g-notes').value),
@@ -237,6 +247,51 @@ function refreshImagesUi(): void {
   refreshImageThumb('img-wall-thumb', imagesState.wallpaper);
   ($('img-icon-remove') as HTMLButtonElement).hidden = imagesState.startIcon === '';
   ($('img-wall-remove') as HTMLButtonElement).hidden = imagesState.wallpaper === '';
+  refreshNoteImagesUi();
+}
+
+function refreshNoteImagesUi(): void {
+  const grid = $('note-imgs-grid');
+  grid.replaceChildren();
+  imagesState.noteImages.forEach((uri, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'note-img';
+    cell.style.backgroundImage = `url("${uri}")`;
+    const idx = document.createElement('span');
+    idx.className = 'idx';
+    idx.textContent = String(i + 1);
+    const rm = document.createElement('button');
+    rm.className = 'rm';
+    rm.type = 'button';
+    rm.textContent = '×';
+    rm.title = 'remover';
+    rm.addEventListener('click', () => {
+      imagesState.noteImages.splice(i, 1);
+      refreshNoteImagesUi();
+      pushDraft();
+    });
+    cell.append(idx, rm);
+    grid.appendChild(cell);
+  });
+  ($('note-imgs-clear') as HTMLButtonElement).hidden = imagesState.noteImages.length === 0;
+}
+
+async function addNoteImages(files: FileList): Promise<void> {
+  const room = MAX_NOTE_IMAGES - imagesState.noteImages.length;
+  const list = [...files].slice(0, Math.max(0, room));
+  for (const file of list) {
+    try {
+      // notas são pequenas na tela; 256px PNG preserva transparência e recorte
+      imagesState.noteImages.push(await resizeImage(file, 256, 'image/png', 1));
+    } catch {
+      /* ignora arquivo inválido */
+    }
+  }
+  if (files.length > room) {
+    window.alert(`Limite de ${MAX_NOTE_IMAGES} imagens de nota. As excedentes foram ignoradas.`);
+  }
+  refreshNoteImagesUi();
+  pushDraft();
 }
 
 // ---------------------------------------------------------------- seeds
@@ -547,6 +602,20 @@ function wire(): void {
   };
   wireImage('startIcon', 'img-icon-pick', 'img-icon-file', 'img-icon-remove');
   wireImage('wallpaper', 'img-wall-pick', 'img-wall-file', 'img-wall-remove');
+
+  // imagens das notas (múltiplas)
+  $('note-imgs-add').addEventListener('click', () => $('note-imgs-file').click());
+  $<HTMLInputElement>('note-imgs-file').addEventListener('change', (e) => {
+    const files = (e.target as HTMLInputElement).files;
+    if (files && files.length) void addNoteImages(files);
+    (e.target as HTMLInputElement).value = '';
+  });
+  $('note-imgs-clear').addEventListener('click', () => {
+    if (!window.confirm('Remover todas as imagens de nota?')) return;
+    imagesState.noteImages = [];
+    refreshNoteImagesUi();
+    pushDraft();
+  });
 
   $('act-calibrate').addEventListener('click', () => void runCalibration());
 

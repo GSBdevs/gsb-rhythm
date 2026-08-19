@@ -30,14 +30,13 @@ Electron: `npm run dist` gera `release/win-unpacked/` + `.zip`, sem assinatura
 de código (alvo `dir`+`zip` dispensa o winCodeSign).
 
 ## Editor de tema (operador)
-
 `/editor.html` (ou botão ⚙ dentro do jogo):
 - identidade/textos, cores, forma das notas;
 - **dificuldade e velocidade** (presets Fácil→Expert + slider 0.5x–2x): a
-  dificuldade também enriquece o ritmo (colcheias, acordes/multi-toque, holds e
-  slides — holds que se movem, no ritmo e sorteadas pela seed);
+  dificuldade também enriquece o ritmo (colcheias e acordes/multi-toque);
 - **seeds**: gerar seed aleatória e salvar/reusar seeds na própria tela;
-- **imagens**: ícone/logo na tela inicial + papel de parede durante o jogo;
+- **imagens**: ícone/logo na tela inicial, papel de parede durante o jogo e
+  imagens 1:1 dentro das notas (aparecem em ordem e repetem em ciclo);
 - **música própria**: escolha um MP3/OGG/WAV — BPM, offset e notas são detectados
   automaticamente (ver [BEATMAP-SISTEMA.md](BEATMAP-SISTEMA.md));
 - **calibração de latência** por aparelho ("Calibrar tocando");
@@ -46,8 +45,7 @@ de código (alvo `dir`+`zip` dispensa o winCodeSign).
 O ícone do app (APK/Electron) é gerado por código — `npm run icons`, ver
 [docs/ICONE.md](docs/ICONE.md).
 
-"Testar jogo" abre o rascunho; "Aplicar e voltar" persiste no aparelho
-(localStorage + backup em disco no Android — sobrevive a reaberturas).
+"Testar jogo" abre o rascunho; "Aplicar e voltar" persiste no aparelho 
 "Exportar tema"/CSV: download no web/Electron; no Android abre a folha nativa
 de compartilhamento (e-mail/Drive/WhatsApp). No Android o CSV consolidado
 também é espelhado em `/Android/data/com.gsb.sbrhythm/files/leads/leads.csv`

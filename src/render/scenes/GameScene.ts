@@ -27,6 +27,15 @@ interface NoteVisual {
   body: Phaser.GameObjects.Graphics;
   ring: Phaser.GameObjects.Graphics;
   note: Note;
+  /** imagem do operador dentro da nota (recortada na forma); ausente sem imagens */
+  image?: Phaser.GameObjects.Image;
+  /** máscara de geometria da imagem (na forma da nota); destruída junto */
+  imageMask?: Phaser.GameObjects.Graphics;
+}
+
+/** chave da textura da i-ésima imagem de nota. */
+function noteImageKey(i: number): string {
+  return `sb_note_${i}`;
 }
 
 const FONT = 'Arial, sans-serif';
@@ -202,6 +211,11 @@ export class GameScene extends Phaser.Scene {
     const jobs: Array<[string, string, () => void]> = [];
     if (this.theme.images.wallpaper) jobs.push(['sb_wallpaper', this.theme.images.wallpaper, () => this.placeWallpaper()]);
     if (this.theme.images.startIcon) jobs.push(['sb_starticon', this.theme.images.startIcon, () => this.placeStartIcon()]);
+    // imagens das notas: só carregar (as notas escolhem a textura ao surgir)
+    this.theme.images.noteImages.forEach((uri, i) => {
+      const key = noteImageKey(i);
+      if (uri && !this.textures.exists(key)) jobs.push([key, uri, () => undefined]);
+    });
     let queued = 0;
     for (const [key, uri, onReady] of jobs) {
       if (this.textures.exists(key)) {
@@ -340,6 +354,19 @@ export class GameScene extends Phaser.Scene {
       (this.logo = this.buildCircleButton(WIDTH / 2, HEIGHT * 0.74, 180, t.playAgainCta, 56)),
       this.gearButton(),
     ];
+    // só ESTE botão volta ao início (tocar em qualquer outro lugar não sai)
+    this.logo
+      .setInteractive(new Phaser.Geom.Circle(0, 0, 180), Phaser.Geom.Circle.Contains)
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
+        event.stopPropagation();
+        this.exitResults();
+      });
+  }
+
+  /** Ação do botão central da tela de resultado. */
+  private exitResults(): void {
+    if (this.theme.lead.enabled) this.showLeadForm();
+    else this.scene.restart();
   }
 
   // ---------------------------------------------------------------- input
@@ -351,8 +378,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.uiPhase === 'results') {
-      if (this.theme.lead.enabled) this.showLeadForm();
-      else this.scene.restart();
+      // na tela de resultado só o botão central age (tratado no próprio botão);
+      // tocar em qualquer outro lugar não faz nada.
       return;
     }
     // compensação de latência calibrada: toque atrasado é adiantado no julgamento
@@ -594,12 +621,29 @@ export class GameScene extends Phaser.Scene {
     body.lineStyle(8, colorToNum(c.noteBorder), 1);
     drawShape(body, this.theme.noteShape, NOTE_RADIUS);
 
+    // imagem do operador dentro da nota, recortada na forma (a borda emoldura)
+    let image: Phaser.GameObjects.Image | undefined;
+    let imageMask: Phaser.GameObjects.Graphics | undefined;
+    const imgs = this.theme.images.noteImages;
+    if (imgs.length > 0) {
+      const key = noteImageKey(note.id % imgs.length); // cicla em ordem de surgimento
+      if (this.textures.exists(key)) {
+        const inner = NOTE_RADIUS * 0.9; // deixa a borda do tema aparecer ao redor
+        image = this.add.image(x, y, key).setDepth(2.5);
+        image.setDisplaySize(inner * 2, inner * 2); // 1:1 cobre a forma inscrita
+        imageMask = this.add.graphics({ x, y }).setVisible(false); // invisível, só p/ recorte
+        imageMask.fillStyle(0xffffff, 1);
+        drawShape(imageMask, this.theme.noteShape, inner);
+        image.setMask(imageMask.createGeometryMask());
+      }
+    }
+
     const ring = this.add.graphics({ x, y }).setDepth(1);
     ring.lineStyle(6, colorToNum(c.approach), 1);
     drawShapeOutline(ring, this.theme.noteShape, NOTE_RADIUS + 12);
 
     this.tweens.add({ targets: body, scale: { from: 0.6, to: 1 }, duration: 150, ease: 'Back.Out' });
-    return { body, ring, note };
+    return { body, ring, note, image, imageMask };
   }
 
   private resolveNoteVisual(noteId: number): void {
@@ -607,6 +651,21 @@ export class GameScene extends Phaser.Scene {
     if (!vis) return;
     this.noteVisuals.delete(noteId);
     vis.ring.destroy();
+    if (vis.image) {
+      const img = vis.image;
+      const mask = vis.imageMask;
+      this.tweens.add({
+        targets: img,
+        scale: img.scale * 1.4,
+        alpha: 0,
+        duration: 180,
+        onComplete: () => {
+          img.clearMask();
+          img.destroy();
+          mask?.destroy();
+        },
+      });
+    }
     this.tweens.add({
       targets: vis.body,
       scale: 1.4,
